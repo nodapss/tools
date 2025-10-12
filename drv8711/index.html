@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DRV8711 레지스터 계산기</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2196F3, #21CBF3);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .register-container {
+            margin-bottom: 40px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .register-container:hover {
+            border-color: #2196F3;
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.1);
+        }
+
+        .register-header {
+            background: #f5f5f5;
+            padding: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .register-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .register-description {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .register-content {
+            padding: 25px;
+        }
+
+        .bit-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .bit-container {
+            text-align: center;
+        }
+
+        .bit-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .bit-button {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: all 0.2s ease;
+            color: #666;
+        }
+
+        .bit-button:hover {
+            border-color: #2196F3;
+            transform: translateY(-2px);
+        }
+
+        .bit-button.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .bit-description {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 5px;
+            min-height: 30px;
+            line-height: 1.2;
+            word-wrap: break-word;
+        }
+
+        .bit-detail {
+            font-size: 0.7rem;
+            color: #555;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f0f8ff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            line-height: 1.3;
+        }
+
+        .register-notes {
+            margin-top: 10px;
+        }
+
+        .note {
+            font-size: 0.85rem;
+            color: #e65100;
+            margin-bottom: 5px;
+            padding: 5px 10px;
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            border-radius: 3px;
+        }
+
+        .register-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            background: #673AB7;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s ease;
+        }
+
+        .action-button:hover {
+            background: #5E35B1;
+        }
+
+        .register-values {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .value-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .value-label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .value-number {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2196F3;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .copy-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s ease;
+        }
+
+        .copy-button:hover {
+            background: #45a049;
+        }
+
+        .summary-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+
+        .summary-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .summary-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .summary-register {
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 5px;
+        }
+
+        .summary-values {
+            font-family: 'Courier New', monospace;
+            color: #666;
+        }
+
+        .footnotes-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 30px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .footnotes-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .footnotes-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 15px;
+        }
+
+        .footnote {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #2196F3;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #555;
+        }
+
+        @media (max-width: 768px) {
+            .bit-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            
+            .register-values {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .value-display {
+                justify-content: space-between;
+            }
+
+            .footnotes-content {
+                grid-template-columns: 1fr;
+            }
+
+            .register-controls {
+                flex-direction: column;
+            }
+
+            .action-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DRV8711 레지스터 계산기</h1>
+            <p>스테퍼 모터 드라이버 DRV8711의 레지스터 값을 비트별로 설정하고 계산하세요</p>
+        </div>
+
+        <div class="main-content">
+            <div id="registers-container"></div>
+            
+            <div class="summary-section">
+                <div class="summary-title">📋 전체 레지스터 요약</div>
+                <div class="summary-grid" id="summary-grid"></div>
+            </div>
+
+            <div class="footnotes-section">
+                <div class="footnotes-title">📚 기술 참고사항</div>
+                <div class="footnotes-content">
+                    <div class="footnote">¹ TPWM = 2×DTIME + TBLANK + TOFF: PWM 주기 계산 공식</div>
+                    <div class="footnote">² ISGAIN: 낮은 전류(< 1A)는 40V/V, 중간 전류(1-3A)는 20V/V, 높은 전류(> 3A)는 5-10V/V 권장</div>
+                    <div class="footnote">³ 마이크로스텝 모드별 토크: Full(100%) > 1/2(70%) > 1/4(50%) > 1/8(35%) > 1/16(25%)</div>
+                    <div class="footnote">⁴ IOUT = (TORQUE/256) × VREF / (8 × RIPROPI): 출력 전류 계산 공식</div>
+                    <div class="footnote">⁵ SIMPLTH: 0-3(매우 민감), 4-7(민감), 8-11(보통), 12-15(둔감)</div>
+                    <div class="footnote">⁶ 초기 토크 설정: 정격 전류의 70-80%에서 시작하여 점진적 조정</div>
+                    <div class="footnote">⁷ fPWM ≈ 1/(TPWM): PWM 주파수 근사 계산. 일반적으로 20-100kHz 범위</div>
+                    <div class="footnote">⁸ TOFF 권장값: 저속(10-20μs), 중속(5-15μs), 고속(2-10μs)</div>
+                    <div class="footnote">⁹ PWMMODE: 0=내부 인덱서(일반적), 1=외부 STEP/DIR 신호 제어</div>
+                    <div class="footnote">¹⁰ TBLANK: PWM ON 직후 전류 센싱 지연 시간으로 스위칭 노이즈 제거</div>
+                    <div class="footnote">¹¹ ABT=1: 적응형 블랭킹으로 PWM 주파수 변화에 자동 대응</div>
+                    <div class="footnote">¹² TBLANK 권장값: TOFF의 10-30% 수준, 최소 1μs 이상</div>
+                    <div class="footnote">¹³ 감쇠 모드 특성: Slow(저소음, 저효율), Fast(고효율, 고리플), Mixed(균형)</div>
+                    <div class="footnote">¹⁴ Auto-tune: 자동으로 최적 감쇠 모드 선택, 부하 변화에 적응</div>
+                    <div class="footnote">¹⁵ TDECAY: Mixed 모드에서 Slow→Fast 전환점. 일반적으로 TOFF의 50-80%</div>
+                    <div class="footnote">¹⁶ Back-EMF: 모터 회전 시 발생하는 역기전력으로 스톨 검출의 기준</div>
+                    <div class="footnote">¹⁷ 스톨 검출 조정: 저속/고부하는 낮은 VDIV와 SDTHR, 고속/저부하는 높은 값</div>
+                    <div class="footnote">¹⁸ SDCNT: 스톨 오검출 방지. 진동이나 일시적 부하 변화 무시</div>
+                    <div class="footnote">¹⁹ DTIME 현재값: 00=400ns, 01=450ns, 10=650ns, 11=850ns (데드타임)</div>
+                    <div class="footnote">²⁰ ISGAIN 현재값: 00=5V/V, 01=10V/V, 10=20V/V, 11=40V/V (전류 센싱 게인)</div>
+                    <div class="footnote">²¹ Step Mode 현재값: 000=Full(71%), 001=1/2, 010=1/4, 011=1/8, 100=1/16, 101=1/32, 110=1/64, 111=1/128</div>
+                    <div class="footnote">²² TOFF 현재값: 값×500ns (PWM OFF 시간, 범위: 0.5μs~128μs)</div>
+                    <div class="footnote">²³ TBLANK 현재값: 값×20ns (블랭킹 시간, 범위: 1μs~5.12μs)</div>
+                    <div class="footnote">²⁴ TORQUE 현재값: 0-255 (출력 전류 비율, 255=100%)</div>
+                    <div class="footnote">²⁵ SIMPLTH 현재값: 0-15 (스톨 검출 민감도, 낮을수록 민감)</div>
+                    <div class="footnote">²⁶ DECMOD 현재값: 000=Force slow, 001=Slow, 010=Fast, 011=Mixed, 100=Slow/Fast, 101-111=Auto-tune</div>
+                    <div class="footnote">²⁷ TDECAY 현재값: 값×500ns (Mixed 모드 전환 시간)</div>
+                    <div class="footnote">²⁸ VDIV 현재값: 00=/32, 01=/16, 10=/8, 11=/4 (Back-EMF 분배비)</div>
+                    <div class="footnote">²⁹ SDCNT 현재값: 00=1, 01=2, 10=4, 11=8 steps (스톨 검출 확인 횟수)</div>
+                    <div class="footnote">³⁰ SDTHR 현재값: 0-255 (스톨 검출 임계값)</div>
+                    <div class="footnote">³¹ IDRIVE 현재값: 00=10mA, 01=30mA, 10=60mA, 11=120mA (게이트 구동 전류)</div>
+                    <div class="footnote">³² IDRIVEN 현재값: 00=10mA, 01=30mA, 10=60mA, 11=120mA (N-FET 구동 전류)</div>
+                    <div class="footnote">³³ TDRIVEP 현재값: 00=250ns, 01=500ns, 10=1μs, 11=2μs (P-FET 프리드라이브 시간)</div>
+                    <div class="footnote">³⁴ TDRIVEN 현재값: 00=250ns, 01=500ns, 10=1μs, 11=2μs (N-FET 프리드라이브 시간)</div>
+                    <div class="footnote">³⁵ OCPTH 현재값: 00=250mV, 01=500mV, 10=750mV, 11=1V (과전류 보호 임계값)</div>
+                    <div class="footnote">³⁶ OCPDEG 현재값: 00=1μs, 01=2μs, 10=4μs, 11=8μs (과전류 디글리치 시간)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DRV8711 레지스터 정의
+        const DRV8711_REGISTERS = {
+            'CTRL': {
+                address: 0x00,
+                name: 'Control Register',
+                description: '모터 제어 기본 설정 (방향, 스텝 모드, 활성화)',
+                defaultValue: 0x022A,
+                notes: [
+                    'DTIME (11:10): 데드타임 설정 - 00=400ns, 01=450ns, 10=650ns, 11=850ns. 짧으면 효율 향상, 길면 EMI 감소¹', 
+                    'ISGAIN (9:8): 전류 센싱 게인 - 00=5V/V(대전류), 01=10V/V(중전류), 10=20V/V(소전류), 11=40V/V(미세전류)²', 
+                    'EXSTALL (7): 스톨 검출 방식 - 0=내부 Back-EMF 기반, 1=외부 센서 기반. 대부분 내부 방식 사용 권장',
+                    'Step Mode (6:3): 마이크로스텝 해상도 - 000=Full(71%), 001=1/2, 010=1/4... 111=1/128. 높을수록 부드럽지만 토크 감소³',
+                    'RSTEP (3): 스텝 방향 반전 - 0=정상, 1=반전. 배선 수정 없이 방향 변경 가능',
+                    'RDIR (2): 방향 신호 반전 - 0=정상, 1=반전. DIR 신호 논리 반전',
+                    'ENBL (1): 모터 출력 활성화 - 0=비활성(하이임피던스), 1=활성(구동 가능). 비상정지 시 0으로 설정'
+                ],
+                bits: {
+                    11: { name: 'DTIME', desc: 'Dead Time', detail: 'High/Low side FET 동시 도통 방지를 위한 데드타임<br/>• 00: 400ns (빠른 스위칭, 높은 효율)<br/>• 01: 450ns<br/>• 10: 650ns<br/>• 11: 850ns (안전한 스위칭, 낮은 EMI)', values: ['400ns', '450ns', '650ns', '850ns'] },
+                    10: { name: 'DTIME', desc: 'Dead Time (bit 10)', detail: '상위 비트와 조합하여 데드타임 설정' },
+                    9: { name: 'ISGAIN', desc: 'Current Sense Gain', detail: '전류 센싱 증폭률. 모터 전류에 맞게 선택<br/>• 00: 5V/V (대전류용 >3A)<br/>• 01: 10V/V (중전류용 1-3A)<br/>• 10: 20V/V (소전류용 0.5-1A)<br/>• 11: 40V/V (미세전류용 <0.5A)', values: ['5V/V', '10V/V', '20V/V', '40V/V'] },
+                    8: { name: 'ISGAIN', desc: 'Current Sense Gain (bit 8)', detail: '상위 비트와 조합하여 게인 설정' },
+                    7: { name: 'EXSTALL', desc: 'External Stall Detection (0: Internal, 1: External)', detail: '스톨 검출 방식 선택<br/>• 0: 내부 Back-EMF 기반 (자동)<br/>• 1: 외부 센서 기반 (정밀)' },
+                    6: { name: 'MODE[3]', desc: 'Step Mode bit 3', detail: '마이크로스텝 해상도 설정 (4비트 조합)<br/>• 0000: Full-step (71% 전류, 최대토크)<br/>• 0001: 1/2 step (부드러운 동작)<br/>• 0010: 1/4 step (균형)<br/>• 0011: 1/8 step (정밀제어)<br/>• 0100: 1/16 step (매우 부드러움)<br/>• 0101: 1/32 step<br/>• 0110: 1/64 step<br/>• 0111: 1/128 step (초정밀)', values: ['Full(71%)', '1/2 step', '1/4 step', '1/8 step', '1/16 step', '1/32 step', '1/64 step', '1/128 step'] },
+                    5: { name: 'MODE[2]', desc: 'Step Mode bit 2', detail: '마이크로스텝 모드 설정 비트' },
+                    4: { name: 'MODE[1]', desc: 'Step Mode bit 1', detail: '마이크로스텝 모드 설정 비트' },
+                    3: { name: 'MODE[0]', desc: 'Step Mode bit 0', detail: '마이크로스텝 모드 설정 비트' },
+                    2: { name: 'RSTEP', desc: 'Reverse Step (0: Normal, 1: Reverse)', detail: '스텝 신호 방향 반전<br/>• 0: 정상 (STEP 펄스마다 정방향 이동)<br/>• 1: 반전 (STEP 펄스마다 역방향 이동)' },
+                    1: { name: 'RDIR', desc: 'Reverse Direction (0: Normal, 1: Reverse)', detail: '방향 신호 반전<br/>• 0: 정상 (DIR 신호 그대로 사용)<br/>• 1: 반전 (DIR 신호 반대로 해석)' },
+                    0: { name: 'ENBL', desc: 'Enable Motor (0: Disable, 1: Enable)', detail: '모터 출력 활성화<br/>• 0: 비활성 (모든 출력 하이임피던스)<br/>• 1: 활성 (모터 구동 가능)' }
+                }
+            },
+            'TORQUE': {
+                address: 0x01,
+                name: 'Torque Register',
+                description: '토크 및 전류 제한 설정',
+                defaultValue: 0x0160,
+                notes: [
+                    'SIMPLTH (11:8): Back-EMF 샘플 임계값 - 0~3=매우민감, 4~7=민감, 8~11=보통, 12~15=둔감. 스톨 검출 민감도 조정⁵',
+                    'TORQUE (7:0): 출력 전류 DAC - 0~255 (0~100%). 공식: IOUT = (TORQUE/256) × VREF / (8 × RIPROPI)⁴',
+                    '초기 설정: 모터 정격 전류의 70-80%에서 시작하여 점진적 조정 권장⁶',
+                    '토크와 발열 관계: 높은 TORQUE 값은 높은 토크이지만 발열 증가, 적절한 방열 필요',
+                    'SIMPLTH 조정: 저속/고부하 시 낮은 값, 고속/저부하 시 높은 값 사용'
+                ],
+                bits: {
+                    11: { name: 'SIMPLTH', desc: 'Back EMF Sample Threshold', detail: 'Back-EMF 샘플링 임계값 (4비트 0-15)<br/>• 0-3: 매우 민감 (미세한 스톨도 검출)<br/>• 4-7: 민감 (일반적인 스톨 검출)<br/>• 8-11: 보통 (균형잡힌 검출)<br/>• 12-15: 둔감 (확실한 스톨만 검출)', calculator: true, bits: 4 },
+                    10: { name: 'SIMPLTH', desc: 'Back EMF Sample Threshold (bit 10)', detail: '다른 비트들과 조합하여 SIMPLTH 값 설정' },
+                    9: { name: 'SIMPLTH', desc: 'Back EMF Sample Threshold (bit 9)', detail: '다른 비트들과 조합하여 SIMPLTH 값 설정' },
+                    8: { name: 'SIMPLTH', desc: 'Back EMF Sample Threshold (bit 8)', detail: '다른 비트들과 조합하여 SIMPLTH 값 설정' },
+                    7: { name: 'TORQUE', desc: 'Torque DAC', detail: '출력 전류 제어 DAC (8비트 0-255)<br/>• 공식: IOUT = (TORQUE/256) × VREF / (8 × RIPROPI)<br/>• 0: 최소전류 (0%)<br/>• 128: 중간전류 (50%)<br/>• 255: 최대전류 (100%)<br/>• 모터 정격의 70-80%로 시작 권장', calculator: true, bits: 8, unit: '/256' },
+                    6: { name: 'TORQUE', desc: 'Torque DAC (bit 6)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' },
+                    5: { name: 'TORQUE', desc: 'Torque DAC (bit 5)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' },
+                    4: { name: 'TORQUE', desc: 'Torque DAC (bit 4)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' },
+                    3: { name: 'TORQUE', desc: 'Torque DAC (bit 3)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' },
+                    2: { name: 'TORQUE', desc: 'Torque DAC (bit 2)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' },
+                    1: { name: 'TORQUE', desc: 'Torque DAC (bit 1)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' },
+                    0: { name: 'TORQUE', desc: 'Torque DAC (bit 0)', detail: '다른 비트들과 조합하여 TORQUE 값 설정' }
+                }
+            },
+            'OFF': {
+                address: 0x02,
+                name: 'Off Time Register',
+                description: 'PWM 오프 타임 및 전류 감쇠 시간 설정',
+                defaultValue: 0x000F,
+                notes: [
+                    'PWMMODE (11): PWM 제어 모드 - 0=내부 인덱서(일반적), 1=외부 STEP/DIR 신호 제어⁹',
+                    'TOFF (7:0): PWM OFF 시간 - 값×500ns 단위. 범위: 0.5μs~128μs. PWM 주파수 결정의 핵심⁷',
+                    'PWM 주파수 계산: fPWM ≈ 1/(2×DTIME + TBLANK + TOFF). 일반적으로 20~100kHz 범위 사용',
+                    'TOFF 최적화: 저속=10~20μs, 중속=5~15μs, 고속=2~10μs. 작을수록 리플 감소, 클수록 효율 향상⁸',
+                    '전류 리플과의 관계: TOFF가 작으면 높은 PWM 주파수로 전류 리플 감소하지만 스위칭 손실 증가'
+                ],
+                bits: {
+                    11: { name: 'PWMMODE', desc: 'PWM Mode (0: Internal indexer, 1: External indexer)', detail: 'PWM 제어 모드 선택<br/>• 0: 내부 인덱서 사용 (일반적)<br/>• 1: 외부 스텝/방향 신호로 제어' },
+                    10: { name: 'Reserved', desc: 'Reserved (should be 0)', detail: '예약된 비트, 항상 0으로 설정' },
+                    9: { name: 'Reserved', desc: 'Reserved (should be 0)', detail: '예약된 비트, 항상 0으로 설정' },
+                    8: { name: 'Reserved', desc: 'Reserved (should be 0)', detail: '예약된 비트, 항상 0으로 설정' },
+                    7: { name: 'TOFF', desc: 'Off Time', detail: 'PWM OFF 시간 (500ns 단위)<br/>• 범위: 0.5μs ~ 128μs<br/>• 계산: 값 × 500ns<br/>• 작을수록: 높은 PWM 주파수, 전류 리플 감소<br/>• 클수록: 낮은 PWM 주파수, 스위칭 손실 감소', calculator: true, unit: '×500ns', min: 1, max: 255 },
+                    6: { name: 'TOFF', desc: 'Off Time (bit 6)', detail: '다른 비트들과 조합하여 TOFF 값 설정' },
+                    5: { name: 'TOFF', desc: 'Off Time (bit 5)', detail: '다른 비트들과 조합하여 TOFF 값 설정' },
+                    4: { name: 'TOFF', desc: 'Off Time (bit 4)', detail: '다른 비트들과 조합하여 TOFF 값 설정' },
+                    3: { name: 'TOFF', desc: 'Off Time (bit 3)', detail: '다른 비트들과 조합하여 TOFF 값 설정' },
+                    2: { name: 'TOFF', desc: 'Off Time (bit 2)', detail: '다른 비트들과 조합하여 TOFF 값 설정' },
+                    1: { name: 'TOFF', desc: 'Off Time (bit 1)', detail: '다른 비트들과 조합하여 TOFF 값 설정' },
+                    0: { name: 'TOFF', desc: 'Off Time (bit 0)', detail: '다른 비트들과 조합하여 TOFF 값 설정' }
+                }
+            },
+            'BLANK': {
+                address: 0x03,
+                name: 'Blanking Time Register',
+                description: '전류 센싱 블랭킹 타임 설정',
+                defaultValue: 0x0150,
+                notes: [
+                    'ABT (11): 적응형 블랭킹 - 0=고정값, 1=PWM 주파수에 따라 자동 조정. 가변 주파수 시 유용¹¹',
+                    'TBLANK (7:0): 블랭킹 시간 - 값×20ns 단위. 범위: 1μs~5.12μs (최소 0x32=1μs)¹⁰',
+                    '블랭킹 목적: PWM ON 직후 스위칭 노이즈로 인한 오검출 방지. 전류 센싱 정확도 향상',
+                    'TBLANK 최적값: TOFF의 10~30% 수준, 최소 1μs 이상 권장¹²',
+                    '트레이드오프: 짧으면 빠른 전류 제어이지만 노이즈 민감, 길면 노이즈 내성 강화이지만 제어 지연'
+                ],
+                bits: {
+                    11: { name: 'ABT', desc: 'Adaptive Blanking Time (0: Fixed, 1: Adaptive)', detail: '적응형 블랭킹 시간 제어<br/>• 0: 고정값 사용 (설정한 TBLANK 값)<br/>• 1: 적응형 (PWM 주기에 따라 자동 조정)' },
+                    10: { name: 'Reserved', desc: 'Reserved (should be 0)', detail: '예약된 비트, 항상 0으로 설정' },
+                    9: { name: 'Reserved', desc: 'Reserved (should be 0)', detail: '예약된 비트, 항상 0으로 설정' },
+                    8: { name: 'Reserved', desc: 'Reserved (should be 0)', detail: '예약된 비트, 항상 0으로 설정' },
+                    7: { name: 'TBLANK', desc: 'Blanking Time', detail: '전류 센싱 블랭킹 시간 (20ns 단위)<br/>• 범위: 1μs ~ 5.12μs<br/>• 계산: 값 × 20ns (최소 0x32=1μs)<br/>• 짧을수록: 빠른 전류 제어, 노이즈 민감<br/>• 길수록: 노이즈 내성 강화, 제어 지연', calculator: true, unit: '×20ns', min: 50, max: 255 },
+                    6: { name: 'TBLANK', desc: 'Blanking Time (bit 6)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' },
+                    5: { name: 'TBLANK', desc: 'Blanking Time (bit 5)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' },
+                    4: { name: 'TBLANK', desc: 'Blanking Time (bit 4)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' },
+                    3: { name: 'TBLANK', desc: 'Blanking Time (bit 3)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' },
+                    2: { name: 'TBLANK', desc: 'Blanking Time (bit 2)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' },
+                    1: { name: 'TBLANK', desc: 'Blanking Time (bit 1)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' },
+                    0: { name: 'TBLANK', desc: 'Blanking Time (bit 0)', detail: '다른 비트들과 조합하여 TBLANK 값 설정' }
+                }
+            },
+            'DECAY': {
+                address: 0x04,
+                name: 'Decay Mode Register',
+                description: '전류 감쇠 모드 및 타이밍 설정',
+                defaultValue: 0x01FC,
+                notes: [
+                    'DECMOD (11:9): 감쇠 모드 - 000=Force slow, 001=Slow, 010=Fast, 011=Mixed, 100=Slow/Fast, 101~111=Auto-tune¹³',
+                    'TDECAY (8:0): Mixed 모드 전환 시간 - 값×500ns 단위. Mixed 모드에서 Slow→Fast 전환점 설정¹⁵',
+                    '감쇠 모드 특성: Slow=저소음/저효율, Fast=고효율/고리플, Mixed=균형, Auto-tune=자동 최적화¹⁴',
+                    'TDECAY 권장값: 일반적으로 TOFF의 50~80% 수준. 너무 작으면 빠른 전환, 너무 크면 느린 전환',
+                    '응용별 선택: 정밀 위치제어=Mixed/Auto, 고속 동작=Fast, 저소음=Slow'
+                ],
+                bits: {
+                    11: { name: 'DECMOD', desc: 'Decay Mode', detail: '전류 감쇠 모드 선택 (3비트)<br/>• 000: Force slow (강제 저속 감쇠)<br/>• 001: Slow decay (저소음, 저효율)<br/>• 010: Fast decay (고효율, 고리플)<br/>• 011: Mixed decay (균형)<br/>• 100: Slow/Fast 적응형<br/>• 101-111: Auto-tune (자동 최적화)', values: ['Force slow', 'Slow', 'Fast', 'Mixed', 'Slow/Fast', 'Auto-tune', 'Auto-tune', 'Auto-tune'] },
+                    10: { name: 'DECMOD', desc: 'Decay Mode (bit 10)', detail: '다른 비트들과 조합하여 감쇠 모드 설정' },
+                    9: { name: 'DECMOD', desc: 'Decay Mode (bit 9)', detail: '다른 비트들과 조합하여 감쇠 모드 설정' },
+                    8: { name: 'TDECAY', desc: 'Decay Transition Time', detail: 'Mixed 모드 전환 시간 (500ns 단위)<br/>• 범위: 0 ~ 127.5μs<br/>• 계산: 값 × 500ns<br/>• Mixed 모드에서 Slow→Fast 전환점<br/>• 일반적으로 TOFF의 50-80% 권장', calculator: true, unit: '×500ns', min: 0, max: 255 },
+                    7: { name: 'TDECAY', desc: 'Decay Transition Time (bit 7)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    6: { name: 'TDECAY', desc: 'Decay Transition Time (bit 6)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    5: { name: 'TDECAY', desc: 'Decay Transition Time (bit 5)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    4: { name: 'TDECAY', desc: 'Decay Transition Time (bit 4)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    3: { name: 'TDECAY', desc: 'Decay Transition Time (bit 3)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    2: { name: 'TDECAY', desc: 'Decay Transition Time (bit 2)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    1: { name: 'TDECAY', desc: 'Decay Transition Time (bit 1)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' },
+                    0: { name: 'TDECAY', desc: 'Decay Transition Time (bit 0)', detail: '다른 비트들과 조합하여 TDECAY 값 설정' }
+                }
+            },
+            'STALL': {
+                address: 0x05,
+                name: 'Stall Detection Register',
+                description: '스톨 검출 임계값 및 설정',
+                defaultValue: 0x44B0,
+                notes: [
+                    'VDIV (11:10): Back-EMF 분배비 - 00=/32, 01=/16, 10=/8, 11=/4. 높은 값=고속용, 낮은 값=저속/고감도용¹⁷',
+                    'SDCNT (9:8): 스톨 검출 확인 횟수 - 00=1, 01=2, 10=4, 11=8 steps. 오검출 방지 필터링¹⁸',
+                    'SDTHR (7:0): 스톨 검출 임계값 - 0~255. 낮을수록 민감, 높을수록 둔감. Back-EMF 레벨과 비교',
+                    'Back-EMF 원리: 모터 회전 시 발생하는 역기전력으로 스톨 검출. 스톨 시 Back-EMF 급감¹⁶',
+                    '설정 가이드: 저속/고부하=낮은 VDIV/SDTHR, 고속/저부하=높은 VDIV/SDTHR'
+                ],
+                bits: {
+                    11: { name: 'VDIV[1]', desc: 'Back EMF Divider bit 1', detail: 'Back-EMF 전압 분배비 설정 (2비트)<br/>• 00: /32 (저속/고감도)<br/>• 01: /16 (중저속)<br/>• 10: /8 (중고속)<br/>• 11: /4 (고속/저감도)', values: ['/32', '/16', '/8', '/4'] },
+                    10: { name: 'VDIV[0]', desc: 'Back EMF Divider bit 0', detail: '다른 비트와 조합하여 VDIV 값 설정' },
+                    9: { name: 'SDCNT[1]', desc: 'Stall Detect Count bit 1', detail: '스톨 검출 확인 스텝 수 (2비트)<br/>• 00: 1 step (즉시 검출)<br/>• 01: 2 steps (약간 지연)<br/>• 10: 4 steps (안정적)<br/>• 11: 8 steps (매우 안정적)', values: ['1 step', '2 steps', '4 steps', '8 steps'] },
+                    8: { name: 'SDCNT[0]', desc: 'Stall Detect Count bit 0', detail: '다른 비트와 조합하여 SDCNT 값 설정' },
+                    7: { name: 'SDTHR[7]', desc: 'Stall Detect Threshold bit 7', detail: '스톨 검출 임계값 (8비트 0-255)<br/>• 낮은 값: 민감한 검출<br/>• 높은 값: 둔감한 검출<br/>• Back-EMF 레벨과 비교하여 스톨 판정', calculator: true, bits: 8, unit: '/255' },
+                    6: { name: 'SDTHR[6]', desc: 'Stall Detect Threshold bit 6', detail: '다른 비트들과 조합하여 SDTHR 값 설정' },
+                    5: { name: 'SDTHR[5]', desc: 'Stall Detect Threshold bit 5', detail: '다른 비트들과 조합하여 SDTHR 값 설정' },
+                    4: { name: 'SDTHR[4]', desc: 'Stall Detect Threshold bit 4', detail: '다른 비트들과 조합하여 SDTHR 값 설정' },
+                    3: { name: 'SDTHR[3]', desc: 'Stall Detect Threshold bit 3', detail: '다른 비트들과 조합하여 SDTHR 값 설정' },
+                    2: { name: 'SDTHR[2]', desc: 'Stall Detect Threshold bit 2', detail: '다른 비트들과 조합하여 SDTHR 값 설정' },
+                    1: { name: 'SDTHR[1]', desc: 'Stall Detect Threshold bit 1', detail: '다른 비트들과 조합하여 SDTHR 값 설정' },
+                    0: { name: 'SDTHR[0]', desc: 'Stall Detect Threshold bit 0', detail: '다른 비트들과 조합하여 SDTHR 값 설정' }
+                }
+            },
+            'DRIVE': {
+                address: 0x06,
+                name: 'Drive Register',
+                description: '출력 드라이브 강도 및 슬루레이트 설정',
+                defaultValue: 0x0005,
+                notes: [
+                    'IDRIVEP (11:10): High-side 게이트 구동 전류 - 00=10mA, 01=30mA, 10=60mA, 11=120mA. MOSFET 크기에 맞게 조정¹⁹',
+                    'IDRIVEN (9:8): Low-side 게이트 구동 전류 - 00=10mA, 01=30mA, 10=60mA, 11=120mA. 대칭 설정 권장',
+                    'TDRIVEP (7:6): High-side 프리드라이브 시간 - 00=250ns, 01=500ns, 10=1μs, 11=2μs. 안정적 스위칭 보장',
+                    'TDRIVEN (5:4): Low-side 프리드라이브 시간 - 00=250ns, 01=500ns, 10=1μs, 11=2μs. 데드타임과 연계 설정',
+                    'OCPDEG (3:2): 과전류 디글리치 시간 - 00=1μs, 01=2μs, 10=4μs, 11=8μs. 노이즈 오보호 방지',
+                    'OCPTH (1:0): 과전류 임계값 - 00=250mV, 01=500mV, 10=750mV, 11=1V. VREF = IMAX × RSENSE < OCPTH²¹',
+                    'EMI vs 효율: 높은 IDRIVE=빠른 스위칭/효율 향상/EMI 증가, 낮은 IDRIVE=느린 스위칭/스위칭 손실 증가²⁰'
+                ],
+                bits: {
+                    11: { name: 'IDRIVEP[1]', desc: 'High-side Gate Drive Peak Current bit 1', detail: 'High-side MOSFET 게이트 드라이브 전류 (2비트)<br/>• 00: 10mA (소형 MOSFET)<br/>• 01: 30mA (중형 MOSFET)<br/>• 10: 60mA (대형 MOSFET)<br/>• 11: 120mA (초대형 MOSFET)', values: ['10mA', '30mA', '60mA', '120mA'] },
+                    10: { name: 'IDRIVEP[0]', desc: 'High-side Gate Drive Peak Current bit 0', detail: '다른 비트와 조합하여 IDRIVEP 값 설정' },
+                    9: { name: 'IDRIVEN[1]', desc: 'Low-side Gate Drive Peak Current bit 1', detail: 'Low-side MOSFET 게이트 드라이브 전류 (2비트)<br/>• 00: 10mA (소형 MOSFET)<br/>• 01: 30mA (중형 MOSFET)<br/>• 10: 60mA (대형 MOSFET)<br/>• 11: 120mA (초대형 MOSFET)', values: ['10mA', '30mA', '60mA', '120mA'] },
+                    8: { name: 'IDRIVEN[0]', desc: 'Low-side Gate Drive Peak Current bit 0', detail: '다른 비트와 조합하여 IDRIVEN 값 설정' },
+                    7: { name: 'TDRIVEP[1]', desc: 'High-side Gate Drive Time bit 1', detail: 'High-side 프리드라이브 시간 (2비트)<br/>• 00: 250ns (빠른 스위칭)<br/>• 01: 500ns (표준)<br/>• 10: 1μs (안정적)<br/>• 11: 2μs (매우 안정적)', values: ['250ns', '500ns', '1μs', '2μs'] },
+                    6: { name: 'TDRIVEP[0]', desc: 'High-side Gate Drive Time bit 0', detail: '다른 비트와 조합하여 TDRIVEP 값 설정' },
+                    5: { name: 'TDRIVEN[1]', desc: 'Low-side Gate Drive Time bit 1', detail: 'Low-side 프리드라이브 시간 (2비트)<br/>• 00: 250ns (빠른 스위칭)<br/>• 01: 500ns (표준)<br/>• 10: 1μs (안정적)<br/>• 11: 2μs (매우 안정적)', values: ['250ns', '500ns', '1μs', '2μs'] },
+                    4: { name: 'TDRIVEN[0]', desc: 'Low-side Gate Drive Time bit 0', detail: '다른 비트와 조합하여 TDRIVEN 값 설정' },
+                    3: { name: 'OCPDEG[1]', desc: 'OCP Deglitch Time bit 1', detail: '과전류 보호 디글리치 시간 (2비트)<br/>• 00: 1μs (빠른 반응)<br/>• 01: 2μs (표준)<br/>• 10: 4μs (안정적)<br/>• 11: 8μs (매우 안정적)', values: ['1μs', '2μs', '4μs', '8μs'] },
+                    2: { name: 'OCPDEG[0]', desc: 'OCP Deglitch Time bit 0', detail: '다른 비트와 조합하여 OCPDEG 값 설정' },
+                    1: { name: 'OCPTH[1]', desc: 'OCP Threshold bit 1', detail: '과전류 보호 임계값 (2비트)<br/>• 00: 250mV (민감한 보호)<br/>• 01: 500mV (표준 보호)<br/>• 10: 750mV (안정적 보호)<br/>• 11: 1V (둔감한 보호)', values: ['250mV', '500mV', '750mV', '1V'] },
+                    0: { name: 'OCPTH[0]', desc: 'OCP Threshold bit 0', detail: '다른 비트와 조합하여 OCPTH 값 설정' }
+                }
+            },
+            'STATUS': {
+                address: 0x07,
+                name: 'Status Register',
+                description: '상태 정보 (읽기 전용)',
+                defaultValue: 0x00C0,
+                notes: [
+                    'STDLAT (11): 스톨 검출 래치 - 0=정상, 1=스톨 검출됨. 레지스터 읽기로 클리어²³',
+                    'STD (10): 실시간 스톨 검출 - 0=정상, 1=현재 스톨 상태. 실시간 반영',
+                    'UVLO (9): 저전압 보호 - 0=정상, 1=공급전압 부족. 동작 불가 상태',
+                    'BPDF/APDF (8:7): 프리드라이버 오류 - 0=정상, 1=B/A채널 게이트 드라이브 오류',
+                    'BOCP/AOCP (6:5): 과전류 보호 - 0=정상, 1=B/A채널 과전류 검출. OCPTH 기준',
+                    'OTS (4): 과온도 보호 - 0=정상, 1=위험 온도 도달. 즉시 동작 정지',
+                    'OTW (3): 과온도 경고 - 0=정상, 1=주의 온도 도달. 부하 감소 권장',
+                    '모니터링: 주기적으로 STATUS 읽어서 시스템 이상 조기 발견²². 오류 시 원인 제거 후 재시작²⁴'
+                ],
+                bits: {
+                    11: { name: 'STDLAT', desc: 'Stall Detection Latch (0: No stall, 1: Stall detected)', detail: '스톨 검출 래치. 한번 스톨이 검출되면 레지스터 읽기 전까지 유지' },
+                    10: { name: 'STD', desc: 'Stall Detection (0: No stall, 1: Stall detected)', detail: '실시간 스톨 검출 상태. 현재 스톨 상태를 실시간 반영' },
+                    9: { name: 'UVLO', desc: 'Under Voltage Lockout (0: Normal, 1: Under voltage)', detail: '저전압 보호 상태. 공급전압이 임계값 이하일 때 활성화' },
+                    8: { name: 'BPDF', desc: 'Channel B Predriver Fault (0: Normal, 1: Fault)', detail: 'B채널 프리드라이버 오류. 게이트 드라이브 회로 문제' },
+                    7: { name: 'APDF', desc: 'Channel A Predriver Fault (0: Normal, 1: Fault)', detail: 'A채널 프리드라이버 오류. 게이트 드라이브 회로 문제' },
+                    6: { name: 'BOCP', desc: 'Channel B Overcurrent (0: Normal, 1: Overcurrent)', detail: 'B채널 과전류 보호 동작. OCPTH 설정값 초과 시 활성화' },
+                    5: { name: 'AOCP', desc: 'Channel A Overcurrent (0: Normal, 1: Overcurrent)', detail: 'A채널 과전류 보호 동작. OCPTH 설정값 초과 시 활성화' },
+                    4: { name: 'OTS', desc: 'Overtemperature Shutdown (0: Normal, 1: Overtemp)', detail: '과온도 보호 동작. 칩 온도가 위험 수준에 도달' },
+                    3: { name: 'OTW', desc: 'Overtemperature Warning (0: Normal, 1: Warning)', detail: '과온도 경고. 온도가 주의 수준에 도달' },
+                    2: { name: 'Reserved', desc: 'Reserved', detail: '예약된 비트' },
+                    1: { name: 'Reserved', desc: 'Reserved', detail: '예약된 비트' },
+                    0: { name: 'Reserved', desc: 'Reserved', detail: '예약된 비트' }
+                }
+            }
+        };
+
+        // 레지스터 상태 저장
+        let registerStates = {};
+
+        // 초기화
+        function initializeRegisters() {
+            Object.keys(DRV8711_REGISTERS).forEach(regName => {
+                const regData = DRV8711_REGISTERS[regName];
+                const defaultValue = regData.defaultValue || 0;
+                
+                // 기본값을 2진수로 변환 (12비트)
+                const binaryStr = defaultValue.toString(2).padStart(12, '0');
+                registerStates[regName] = binaryStr.split('').map(bit => parseInt(bit)).reverse();
+            });
+        }
+
+        // 레지스터 UI 생성
+        function createRegisterUI() {
+            const container = document.getElementById('registers-container');
+            
+            Object.entries(DRV8711_REGISTERS).forEach(([regName, regData]) => {
+                const regDiv = document.createElement('div');
+                regDiv.className = 'register-container';
+                
+                regDiv.innerHTML = `
+                    <div class="register-header">
+                        <div class="register-title">${regName} (0x${regData.address.toString(16).toUpperCase().padStart(2, '0')}) - Default: 0x${regData.defaultValue.toString(16).toUpperCase().padStart(3, '0')}, ${regData.description}</div>
+                        <div class="register-realtime" id="${regName}-realtime" style="color: #2196F3; font-weight: bold; font-size: 0.95rem; margin-top: 5px;">계산값 로딩중...</div>
+                        <div class="register-notes">
+                            ${regData.notes ? regData.notes.map(note => `<div class="note">⚠️ ${note}</div>`).join('') : ''}
+                        </div>
+                    </div>
+                    <div class="register-content">
+                        <div class="register-controls">
+                            <button class="action-button" onclick="loadDefault('${regName}')">기본값 로드</button>
+                            <button class="action-button" onclick="clearRegister('${regName}')">모두 0으로</button>
+                            <button class="action-button" onclick="toggleDetailView('${regName}')">상세보기</button>
+                        </div>
+                        <div class="bit-grid" id="${regName}-bits">
+                            ${Array.from({length: 12}, (_, i) => {
+                                const bitNum = 11 - i; // MSB first
+                                const bitInfo = regData.bits[bitNum];
+                                return `
+                                    <div class="bit-container">
+                                        <div class="bit-label">Bit ${bitNum}</div>
+                                        <button class="bit-button" id="${regName}-bit-${bitNum}" onclick="toggleBit('${regName}', ${bitNum})">0</button>
+                                        <div class="bit-description" title="${bitInfo.desc}">${bitInfo.name}</div>
+                                        <div class="bit-detail" id="${regName}-detail-${bitNum}" style="display: none;">
+                                            ${bitInfo.detail || ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="register-values">
+                            <div class="value-display">
+                                <span class="value-label">Binary:</span>
+                                <span class="value-number" id="${regName}-binary">000000000000</span>
+                                <button class="copy-button" onclick="copyValue('${regName}-binary')">복사</button>
+                            </div>
+                            <div class="value-display">
+                                <span class="value-label">Decimal:</span>
+                                <span class="value-number" id="${regName}-decimal">0</span>
+                                <button class="copy-button" onclick="copyValue('${regName}-decimal')">복사</button>
+                            </div>
+                            <div class="value-display">
+                                <span class="value-label">Hex:</span>
+                                <span class="value-number" id="${regName}-hex">0x000</span>
+                                <button class="copy-button" onclick="copyValue('${regName}-hex')">복사</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(regDiv);
+            });
+        }
+
+        // 비트 토글
+        function toggleBit(regName, bitNum) {
+            registerStates[regName][bitNum] = 1 - registerStates[regName][bitNum];
+            updateRegisterDisplay(regName);
+            updateSummary();
+        }
+
+        // 계산된 값 표시 함수
+        function getCalculatedValue(regName, regData, currentState) {
+            const results = [];
+            
+            // CTRL 레지스터의 특수 필드들
+            if (regName === 'CTRL') {
+                // DTIME 값 계산 (bit 11:10)
+                const dtimeValue = (currentState[11] << 1) | currentState[10];
+                const dtimeValues = ['400ns', '450ns', '650ns', '850ns'];
+                results.push(`DTIME: ${dtimeValues[dtimeValue]}`);
+                
+                // ISGAIN 값 계산 (bit 9:8)
+                const isgainValue = (currentState[9] << 1) | currentState[8];
+                const isgainValues = ['5V/V', '10V/V', '20V/V', '40V/V'];
+                results.push(`ISGAIN: ${isgainValues[isgainValue]}`);
+                
+                // EXSTALL 값 계산 (bit 7)
+                const exstallValue = currentState[7];
+                results.push(`스톨검출: ${exstallValue ? '외부센서' : '내부Back-EMF'}`);
+                
+                // Step Mode 값 계산 (bit 6:3)
+                const modeValue = (currentState[6] << 3) | (currentState[5] << 2) | (currentState[4] << 1) | currentState[3];
+                const modeValues = ['Full(71%)', '1/2 step', '1/4 step', '1/8 step', '1/16 step', '1/32 step', '1/64 step', '1/128 step'];
+                if (modeValue < modeValues.length) {
+                    results.push(`Step Mode: ${modeValues[modeValue]}`);
+                }
+                
+                // RSTEP 값 계산 (bit 2)
+                const rstepValue = currentState[2];
+                results.push(`스텝방향: ${rstepValue ? '반전' : '정상'}`);
+                
+                // RDIR 값 계산 (bit 1)
+                const rdirValue = currentState[1];
+                results.push(`DIR신호: ${rdirValue ? '반전' : '정상'}`);
+                
+                // ENBL 값 계산 (bit 0)
+                const enblValue = currentState[0];
+                results.push(`모터출력: ${enblValue ? '활성' : '비활성'}`);
+            }
+            
+            // TORQUE 레지스터의 값 계산
+            if (regName === 'TORQUE') {
+                // SIMPLTH 값 계산 (bit 11:8)
+                const simplthValue = (currentState[11] << 3) | (currentState[10] << 2) | (currentState[9] << 1) | currentState[8];
+                const simplthDesc = simplthValue <= 3 ? '매우민감' : simplthValue <= 7 ? '민감' : simplthValue <= 11 ? '보통' : '둔감';
+                results.push(`SIMPLTH: ${simplthValue} (${simplthDesc})`);
+                
+                // TORQUE 값 계산 (bit 7:0)
+                const torqueValue = currentState.slice(0, 8).reduce((acc, bit, index) => acc + (bit << index), 0);
+                const torquePercent = Math.round((torqueValue / 255) * 100);
+                results.push(`TORQUE: ${torqueValue}/255 (${torquePercent}%)`);
+            }
+            
+            // OFF 레지스터의 TOFF 값 계산
+            if (regName === 'OFF') {
+                const toffValue = currentState.slice(0, 8).reduce((acc, bit, index) => acc + (bit << index), 0);
+                const toffTime = toffValue * 0.5; // 500ns 단위
+                results.push(`TOFF: ${toffTime}μs (값: ${toffValue})`);
+            }
+            
+            // BLANK 레지스터의 TBLANK 값 계산
+            if (regName === 'BLANK') {
+                const tblankValue = currentState.slice(0, 8).reduce((acc, bit, index) => acc + (bit << index), 0);
+                const tblankTime = Math.max(tblankValue * 0.02, 1.0); // 20ns 단위, 최소 1μs
+                results.push(`TBLANK: ${tblankTime}μs (값: ${tblankValue})`);
+            }
+            
+            // DECAY 레지스터의 값 계산
+            if (regName === 'DECAY') {
+                // DECMOD 값 계산 (bit 11:9)
+                const decmodValue = (currentState[11] << 2) | (currentState[10] << 1) | currentState[9];
+                const decmodValues = ['Force slow', 'Slow', 'Fast', 'Mixed', 'Slow/Fast', 'Auto-tune', 'Auto-tune', 'Auto-tune'];
+                results.push(`DECMOD: ${decmodValues[decmodValue]} (${decmodValue})`);
+                
+                // TDECAY 값 계산 (bit 8:0)
+                const tdecayValue = currentState.slice(0, 9).reduce((acc, bit, index) => acc + (bit << index), 0);
+                const tdecayTime = tdecayValue * 0.5; // 500ns 단위
+                results.push(`TDECAY: ${tdecayTime}μs (값: ${tdecayValue})`);
+            }
+            
+            // STALL 레지스터의 값 계산
+            if (regName === 'STALL') {
+                // VDIV 값 계산 (bit 11:10)
+                const vdivValue = (currentState[11] << 1) | currentState[10];
+                const vdivValues = ['/32', '/16', '/8', '/4'];
+                results.push(`VDIV: ${vdivValues[vdivValue]} (${vdivValue})`);
+                
+                // SDCNT 값 계산 (bit 9:8)
+                const sdcntValue = (currentState[9] << 1) | currentState[8];
+                const sdcntValues = ['1 step', '2 steps', '4 steps', '8 steps'];
+                results.push(`SDCNT: ${sdcntValues[sdcntValue]} (${sdcntValue})`);
+                
+                // SDTHR 값 계산 (bit 7:0)
+                const sdthrValue = currentState.slice(0, 8).reduce((acc, bit, index) => acc + (bit << index), 0);
+                results.push(`SDTHR: ${sdthrValue}/255`);
+            }
+            
+            // DRIVE 레지스터의 값 계산
+            if (regName === 'DRIVE') {
+                // IDRIVEP 값 계산 (bit 11:10)
+                const idrivepValue = (currentState[11] << 1) | currentState[10];
+                const idriveValues = ['10mA', '30mA', '60mA', '120mA'];
+                results.push(`IDRIVEP: ${idriveValues[idrivepValue]} (${idrivepValue})`);
+                
+                // IDRIVEN 값 계산 (bit 9:8)
+                const idrivenValue = (currentState[9] << 1) | currentState[8];
+                results.push(`IDRIVEN: ${idriveValues[idrivenValue]} (${idrivenValue})`);
+                
+                // TDRIVEP 값 계산 (bit 7:6)
+                const tdrivepValue = (currentState[7] << 1) | currentState[6];
+                const tdriveValues = ['250ns', '500ns', '1μs', '2μs'];
+                results.push(`TDRIVEP: ${tdriveValues[tdrivepValue]} (${tdrivepValue})`);
+                
+                // TDRIVEN 값 계산 (bit 5:4)
+                const tdrivenValue = (currentState[5] << 1) | currentState[4];
+                results.push(`TDRIVEN: ${tdriveValues[tdrivenValue]} (${tdrivenValue})`);
+                
+                // OCPDEG 값 계산 (bit 3:2)
+                const ocpdegValue = (currentState[3] << 1) | currentState[2];
+                const ocpdegValues = ['1μs', '2μs', '4μs', '8μs'];
+                results.push(`OCPDEG: ${ocpdegValues[ocpdegValue]} (${ocpdegValue})`);
+                
+                // OCPTH 값 계산 (bit 1:0)
+                const ocpthValue = (currentState[1] << 1) | currentState[0];
+                const ocpthValues = ['250mV', '500mV', '750mV', '1V'];
+                results.push(`OCPTH: ${ocpthValues[ocpthValue]} (${ocpthValue})`);
+            }
+            
+            // STATUS 레지스터의 값 계산
+            if (regName === 'STATUS') {
+                const statusBits = [];
+                if (currentState[11]) statusBits.push('STDLAT: 스톨 래치');
+                if (currentState[10]) statusBits.push('STD: 실시간 스톨');
+                if (currentState[9]) statusBits.push('UVLO: 저전압');
+                if (currentState[8]) statusBits.push('BPDF: B채널 오류');
+                if (currentState[7]) statusBits.push('APDF: A채널 오류');
+                if (currentState[6]) statusBits.push('BOCP: B채널 과전류');
+                if (currentState[5]) statusBits.push('AOCP: A채널 과전류');
+                if (currentState[4]) statusBits.push('OTS: 과온도 보호');
+                if (currentState[3]) statusBits.push('OTW: 과온도 경고');
+                
+                if (statusBits.length > 0) {
+                    results.push(`활성 상태: ${statusBits.join(', ')}`);
+                } else {
+                    results.push('모든 상태 정상');
+                }
+            }
+            
+            return results;
+        }
+
+        // 레지스터 디스플레이 업데이트
+        function updateRegisterDisplay(regName) {
+            const state = registerStates[regName];
+            const regData = DRV8711_REGISTERS[regName];
+            
+            // 비트 버튼 업데이트
+            state.forEach((bit, index) => {
+                const button = document.getElementById(`${regName}-bit-${index}`);
+                button.textContent = bit;
+                button.className = bit ? 'bit-button active' : 'bit-button';
+            });
+            
+            // 값 계산 및 표시
+            const binaryStr = state.map((bit, index) => bit).reverse().join('');
+            const decimalValue = parseInt(binaryStr, 2);
+            const hexValue = decimalValue.toString(16).toUpperCase().padStart(3, '0');
+            
+            document.getElementById(`${regName}-binary`).textContent = binaryStr;
+            document.getElementById(`${regName}-decimal`).textContent = decimalValue;
+            document.getElementById(`${regName}-hex`).textContent = `0x${hexValue}`;
+            
+            // 계산된 값들 업데이트
+            const calculatedValues = getCalculatedValue(regName, regData, state);
+            
+            // 헤더에 실시간 계산값 표시
+            const realtimeElement = document.getElementById(`${regName}-realtime`);
+            if (realtimeElement) {
+                if (calculatedValues.length > 0) {
+                    realtimeElement.textContent = calculatedValues.join(', ');
+                } else {
+                    realtimeElement.textContent = '계산된 값 없음';
+                }
+            }
+        }
+
+        // 요약 업데이트
+        function updateSummary() {
+            const summaryGrid = document.getElementById('summary-grid');
+            summaryGrid.innerHTML = '';
+            
+            Object.entries(DRV8711_REGISTERS).forEach(([regName, regData]) => {
+                const state = registerStates[regName];
+                const binaryStr = state.map((bit, index) => bit).reverse().join('');
+                const decimalValue = parseInt(binaryStr, 2);
+                const hexValue = decimalValue.toString(16).toUpperCase().padStart(3, '0');
+                
+                // 계산된 값들 가져오기
+                const calculatedValues = getCalculatedValue(regName, regData, state);
+                const calculatedValuesHtml = calculatedValues.length > 0 
+                    ? '<br><span style="color: #2196F3; font-weight: bold;">📊 ' + calculatedValues.join(', ') + '</span>'
+                    : '';
+                
+                const summaryItem = document.createElement('div');
+                summaryItem.className = 'summary-item';
+                summaryItem.innerHTML = `
+                    <div class="summary-register">${regName} (0x${regData.address.toString(16).toUpperCase().padStart(2, '0')})</div>
+                    <div class="summary-values">
+                        Binary: ${binaryStr}<br>
+                        Decimal: ${decimalValue}<br>
+                        Hex: 0x${hexValue}${calculatedValuesHtml}
+                    </div>
+                `;
+                
+                summaryGrid.appendChild(summaryItem);
+            });
+        }
+
+        // 값 복사
+        function copyValue(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = element.textContent;
+                element.textContent = '복사됨!';
+                element.style.color = '#4CAF50';
+                
+                setTimeout(() => {
+                    element.textContent = originalText;
+                    element.style.color = '#2196F3';
+                }, 1000);
+            }).catch(() => {
+                alert('클립보드 복사에 실패했습니다.');
+            });
+        }
+
+        // 기본값 로드
+        function loadDefault(regName) {
+            const regData = DRV8711_REGISTERS[regName];
+            const defaultValue = regData.defaultValue || 0;
+            
+            // 기본값을 2진수로 변환 (12비트)
+            const binaryStr = defaultValue.toString(2).padStart(12, '0');
+            registerStates[regName] = binaryStr.split('').map(bit => parseInt(bit)).reverse();
+            
+            updateRegisterDisplay(regName);
+            updateSummary();
+        }
+
+        // 레지스터 클리어
+        function clearRegister(regName) {
+            registerStates[regName] = Array(12).fill(0);
+            updateRegisterDisplay(regName);
+            updateSummary();
+        }
+
+        // 상세보기 토글
+        function toggleDetailView(regName) {
+            const regData = DRV8711_REGISTERS[regName];
+            Object.keys(regData.bits).forEach(bitNum => {
+                const detailElement = document.getElementById(`${regName}-detail-${bitNum}`);
+                if (detailElement) {
+                    const isVisible = detailElement.style.display !== 'none';
+                    detailElement.style.display = isVisible ? 'none' : 'block';
+                }
+            });
+        }
+
+        // 모든 레지스터 기본값 로드
+        function loadAllDefaults() {
+            Object.keys(DRV8711_REGISTERS).forEach(regName => {
+                loadDefault(regName);
+            });
+        }
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeRegisters();
+            createRegisterUI();
+            
+            // 모든 레지스터 디스플레이 업데이트
+            Object.keys(DRV8711_REGISTERS).forEach(regName => {
+                updateRegisterDisplay(regName);
+            });
+            
+            updateSummary();
+            
+            // 전역 컨트롤 버튼 추가
+            const headerElement = document.querySelector('.header');
+            const globalControlsDiv = document.createElement('div');
+            globalControlsDiv.innerHTML = `
+                <div style="margin-top: 20px;">
+                    <button class="copy-button" onclick="loadAllDefaults()" style="margin-right: 10px; padding: 10px 20px; font-size: 1rem;">
+                        🔄 모든 레지스터 기본값 로드
+                    </button>
+                </div>
+            `;
+            headerElement.appendChild(globalControlsDiv);
+        });
+    </script>
+</body>
+</html> 

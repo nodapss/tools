@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Terminal + Plot</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', Arial, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
+.container { max-width: 1400px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 16px 32px rgba(0,0,0,0.12); overflow: hidden; }
+.header { background: linear-gradient(135deg, #2196F3, #21CBF3); color: #fff; padding: 12px 16px; border-bottom: none; }
+.header h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.splitter { display: block; padding: 12px 16px; }
+.gutter { height: 8px; background: #f2f2f2; margin: 10px 0; border-radius: 6px; }
+.section { background: #fff; border: 2px solid #e0e0e0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.section h3 { margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #333; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.row.compact { gap: 4px; }
+.controls-row { display:flex; justify-content:flex-end; gap:12px; align-items:center; }
+.controls-row label { display:flex; align-items:center; gap:6px; }
+.controls-grid { display:grid; grid-auto-flow:column; grid-auto-columns:max-content; column-gap:12px; align-items:center; justify-content:end; }
+.controls-grid .ctl { display:flex; align-items:center; gap:6px; }
+.controls-grid .lab { display:inline-block; width:60px; text-align:right; }
+#sec-connect .row label, #sec-connect .row select, #sec-connect .row button { font-size: 12px; }
+button { padding: 6px 10px; font-size: 12px; cursor: pointer; transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .02s linear; height: 28px; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
+button:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+button:active { transform: translateY(1px); }
+button:focus { outline: 2px solid #90caf9; outline-offset: 1px; }
+button.secondary { background: #f3f3f3; border: 1px solid #ccc; }
+button.secondary:hover { background: #eaeaea; border-color: #bdbdbd; }
+button.secondary:active { background: #e0e0e0; }
+.status { margin: 6px 0; color: #0a6; font-size: 12px; }
+.small { font-size: 12px; color: #eef; }
+.terminal { background: #0b0b0b; color: #e8e8e8; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; padding: 8px; height: 320px; overflow-y: auto; overflow-x: hidden; white-space: pre-wrap; border-radius: 6px; border: 1px solid #333; }
+.terminal-wrap { position: relative; }
+.term-edit { position: absolute; right: 28px; top: 8px; color: #fff; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); padding: 2px 6px; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 4px; z-index: 5; }
+.input-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-top: 6px; }
+input[type="text"], input[type="number"] { padding: 4px 6px; font-size: 12px; }
+select { padding: 2px 6px; font-size: 12px; }
+label { white-space: nowrap; }
+.canvas-wrap { height: 420px; position: relative; }
+/* 그래프 우상단 플로팅 체크박스 - 터미널 편집과 동일 크기/위치 */
+.canvas-wrap .term-edit { position: absolute; right: 28px; top: 8px; color: #fff; background: rgba(0,0,0,0.6); border: 1px solid rgba(0,0,0,0.6); box-shadow: 0 2px 6px rgba(0,0,0,0.15); display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font-size: 12px; white-space: nowrap; width: auto; border-radius: 4px; }
+
+/* 우측 버튼/컨트롤 정렬 간격 통일 */
+.btn-row { align-items: center; justify-content: flex-end; gap: 10px; }
+#chart { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header" style="position:relative;">
+    <h2>Web Terminal</h2>
+    <p class="small" style="margin:4px 0 0 0;">Chrome/Edge에서 사용하세요. 보드의 UART 장치를 선택해 연결합니다.</p>
+    <div style="position:absolute; right:16px; bottom:8px;">
+      <a href="#" id="downloadHeaders" style="color:#fff; text-decoration:underline;">WebTerminal 라이브러리 다운로드</a>
+    </div>
+  </div>
+
+  <div class="splitter">
+
+    <!-- 1) 포트 연결 섹션 -->
+    <div class="section" id="sec-connect">
+      <h3>포트 연결</h3>
+      <div class="row compact">
+        <button id="btnRequest">포트 선택</button>
+        <button id="btnConnect" disabled>연결</button>
+        <button id="btnDisconnect" class="secondary" disabled>해제</button>
+        <label>Baud:
+          <select id="baud">
+            <option selected>115200</option>
+            <option>230400</option>
+            <option>460800</option>
+            <option>921600</option>
+          </select>
+        </label>
+        <label>데이터비트:
+          <select id="dataBits">
+            <option value="8" selected>8</option>
+            <option value="7">7</option>
+          </select>
+        </label>
+        <label>패리티:
+          <select id="parity">
+            <option value="none" selected>None</option>
+            <option value="even">Even</option>
+            <option value="odd">Odd</option>
+          </select>
+        </label>
+        <label>스톱비트:
+          <select id="stopBits">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+          </select>
+        </label>
+        <label>플로우:
+          <select id="flow" style="min-width: 120px;">
+            <option value="none" selected>None</option>
+            <option value="hardware">RTS/CTS (HW)</option>
+          </select>
+        </label>
+      </div>
+      <div id="status" class="status">대기 중</div>
+    </div>
+
+    <div class="gutter"></div>
+
+    <!-- 2) 터미널 섹션 (위) -->
+    <div class="section" id="sec-terminal">
+      <div>
+        <h3 style="margin:0;">터미널</h3>
+        <div style="display:flex; gap:6px; align-items:center; margin: 4px 0 4px auto; justify-content:flex-end;">
+          <label>개행:
+            <select id="newline" style="min-width: 100px;">
+              <option value="CRLF">CRLF (\r\n)</option>
+              <option value="CR" selected>CR (\r)</option>
+              <option value="LF">LF (\n)</option>
+              <option value="NONE">없음</option>
+            </select>
+          </label>
+          <button id="btnImport" class="secondary">불러오기</button>
+          <button id="btnCopy" class="secondary">전체 복사</button>
+          <button id="btnSave" class="secondary">저장</button>
+        </div>
+      </div>
+      <div class="terminal-wrap">
+        <label class="term-edit"><input type="checkbox" id="editableToggle"> 편집</label>
+        <div id="terminal" class="terminal"></div>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <label><input type="checkbox" id="enterSend" checked> Enter로 전송</label>
+      </div>
+      <div class="input-row">
+        <input id="tx" type="text" placeholder="명령을 입력하세요...">
+        <button id="btnSend">전송</button>
+        <button id="btnClear" class="secondary">터미널 지우기</button>
+      </div>
+    </div>
+
+    <div class="gutter"></div>
+
+    <!-- 3) 시각화 섹션 (아래) -->
+    <div class="section" id="sec-plot">
+      <h3>시각화</h3>
+      <div class="row compact btn-row" style="margin-top:4px;">
+        <label>데이터셋: <select id="datasetSelect" style="min-width:260px;"></select></label>
+        <button id="btnPlotSelected" class="secondary">선택 플롯</button>
+        <button id="btnAutoScale" class="secondary">자동축설정</button>
+        <button id="btnLoadViz" class="secondary">설정불러오기</button>
+        <button id="btnSaveViz" class="secondary">설정저장</button>
+        <label style="margin-left:10px; display:none;"><input type="checkbox" id="autoPlot" checked> 최근수신</label>
+      </div>
+      <div class="canvas-wrap" style="width:100%; display:flex; justify-content:center; height:560px; margin-top:10px; position:relative;">
+        <label class="term-edit"><input type="checkbox" id="autoPlotFloating" checked> 갱신</label>
+        <canvas id="chart" style="max-width: 1280px; width:100%; height:100%;"></canvas>
+      </div>
+      <div class="controls-grid">
+        <div class="ctl"><span class="lab">X라벨:</span><input id="xLabel" type="text" value="Time Line" style="width:140px;"></div>
+        <div class="ctl"><span class="lab">Xmin:</span><input id="xMin" type="number" value="0" style="width:120px;"></div>
+        <div class="ctl"><span class="lab">Xmax:</span><input id="xMax" type="number" value="511" style="width:120px;"></div>
+        <div class="ctl"><span class="lab">X눈금:</span><input id="xScale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
+      </div>
+      <div class="controls-grid" style="margin-top:6px;">
+        <div class="ctl"><span class="lab">Y라벨:</span><input id="yLabel" type="text" value="Signal" style="width:140px;"></div>
+        <div class="ctl"><span class="lab">Ymin:</span><input id="yMin" type="number" value="0" style="width:120px;"></div>
+        <div class="ctl"><span class="lab">Ymax:</span><input id="yMax" type="number" value="1000" style="width:120px;"></div>
+        <div class="ctl"><span class="lab">Y눈금:</span><input id="yScale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
+      </div>
+      <p id="plotStatus" class="small" style="color:#666;">준비됨: 터미널의 최신 FFT 블록을 파싱하여 플롯합니다.</p>
+      <p class="small">터미널에 출력된 "index,real,imag,mag" 라인을 자동 추출하여 플롯합니다.</p>
+    </div>
+
+    <div class="gutter"></div>
+
+
+  </div>
+</div>
+
+<script>
+let selectedPort = null;
+let reader = null;
+let writer = null;
+let reading = false;
+let lineBuffer = '';
+let chart = null;
+let datasetCounter = 0;
+let datasetList = []; // {id,label,values,caption}
+let streamBuffer = '';
+let pendingCaption = null; // {id, caption}
+let lastAction = '';
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+function appendTerm(text) {
+  const term = document.getElementById('terminal');
+  term.textContent += text;
+  term.scrollTop = term.scrollHeight;
+}
+function clearTerminal() { document.getElementById('terminal').textContent = ''; datasetList = []; datasetCounter = 0; streamBuffer = ''; refreshDatasetSelect(); }
+
+// refreshPortList 제거 (포트 콤보 롤백)
+
+async function requestPort() {
+  if (!('serial' in navigator)) {
+    alert('이 브라우저는 Web Serial을 지원하지 않습니다. Chrome/Edge 사용 및 HTTPS 또는 file://에서 여세요.');
+    return;
+  }
+  try {
+    selectedPort = await navigator.serial.requestPort();
+    document.getElementById('btnConnect').disabled = false;
+    setStatus('포트 선택됨');
+  } catch (e) {
+    setStatus('포트 선택 취소');
+  }
+}
+
+async function connect() {
+  if (!selectedPort) { alert('먼저 포트를 선택하세요.'); return; }
+  const baud = Number(document.getElementById('baud').value);
+  const dataBits = Number(document.getElementById('dataBits').value);
+  const parity = document.getElementById('parity').value;
+  const stopBits = Number(document.getElementById('stopBits').value);
+  const flow = document.getElementById('flow').value;
+  const flowControl = flow === 'hardware' ? 'hardware' : undefined;
+  try {
+    await selectedPort.open({ baudRate: baud, dataBits, parity, stopBits, flowControl });
+    writer = selectedPort.writable.getWriter();
+    startReadLoop();
+    setStatus(`연결됨 @ ${baud}bps, ${dataBits}${parity[0].toUpperCase()}${stopBits}`);
+    document.getElementById('btnDisconnect').disabled = false;
+    document.getElementById('btnConnect').disabled = true;
+    appendTerm(`>> CONNECTED @ ${baud}bps\n`);
+  } catch (e) {
+    alert('연결 실패: ' + (e.message || e));
+  }
+}
+
+async function disconnect() {
+  try {
+    reading = false;
+    if (reader) {
+      try { await reader.cancel(); } catch {}
+      try { reader.releaseLock(); } catch {}
+      reader = null;
+    }
+    if (writer) {
+      try { await writer.close(); } catch {}
+      try { writer.releaseLock(); } catch {}
+      writer = null;
+    }
+    if (selectedPort) {
+      try { await selectedPort.close(); } catch {}
+    }
+    setStatus('해제됨');
+    document.getElementById('btnDisconnect').disabled = true;
+    document.getElementById('btnConnect').disabled = false;
+    appendTerm('>> DISCONNECTED\n');
+  } catch (e) {
+    setStatus('해제 처리 중 오류');
+  }
+}
+
+async function startReadLoop() {
+  try {
+    const textDecoder = new TextDecoderStream();
+    const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
+    reader = textDecoder.readable.getReader();
+    reading = true;
+    while (reading) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) handleIncomingText(value);
+    }
+  } catch (e) {
+    setStatus('읽기 종료: ' + (e.message || e));
+  } finally {
+    try { if (reader) reader.releaseLock(); } catch {}
+  }
+}
+
+function tryExtractDatasetsFromBuffer() {
+  // 1) Pick up caption lines if present at line starts
+  const capRe = /\[Plot_(\d{4}):\s*([^\]]+)\]/;
+  let foundLineBreak;
+  do {
+    foundLineBreak = false;
+    const nl = streamBuffer.indexOf('\n');
+    if (nl >= 0) {
+      const line = streamBuffer.slice(0, nl).trim();
+      const m = line.match(capRe);
+      if (m) {
+        pendingCaption = { id: `Plot_${m[1]}`, caption: m[2] };
+        streamBuffer = streamBuffer.slice(nl + 1);
+        foundLineBreak = true;
+      }
+    }
+  } while (foundLineBreak);
+
+  // 2) Extract DataStart..DataEnd segments
+
+  // parse segments: DataStart ... DataEnd
+  while (true) {
+    const s = streamBuffer.indexOf('DataStart');
+    if (s < 0) { return; }
+    const e = streamBuffer.indexOf('DataEnd', s);
+    if (e < 0) { return; }
+    // If caption not yet captured by newline logic, try to back-search right before DataStart
+    if (!pendingCaption) {
+      const pre = streamBuffer.slice(0, s);
+      const mm = pre.match(/\[Plot_(\d{4}):\s*([^\]]+)\]\s*$/);
+      if (mm) pendingCaption = { id: `Plot_${mm[1]}`, caption: mm[2] };
+    }
+    const payload = streamBuffer.substring(s + 'DataStart'.length + 1, e) // skip comma after DataStart
+      .replace(/\s+/g, '');
+    // Convert to numbers
+    const parts = payload.split(',').filter(Boolean);
+    const values = parts.map(x => Number(x)).filter(v => Number.isFinite(v));
+    const id = pendingCaption && pendingCaption.id ? pendingCaption.id : `Plot_${String(datasetCounter).padStart(4,'0')}`;
+    const caption = pendingCaption && pendingCaption.caption ? pendingCaption.caption : `Dataset`;
+    const label = `${id}: ${caption}`;
+    datasetList.push({ id, label, caption, values });
+    if (!pendingCaption) datasetCounter += 1; // if caption absent, advance internal counter
+    pendingCaption = null;
+    // shrink buffer to after DataEnd
+    streamBuffer = streamBuffer.slice(e + 'DataEnd'.length);
+    // auto plot latest if enabled
+    try {
+      if (document.getElementById('autoPlot')?.checked) {
+        const sel = document.getElementById('datasetSelect');
+        if (sel) { sel.value = id; }
+        plotMagnitudeArray(values);
+        // autoscale after plotting
+        try { autoScaleAxes(); } catch(_) {}
+      }
+    } catch (_) {}
+  }
+}
+
+function handleIncomingText(chunk) {
+  const text = chunk.replace(/\r\n|\n\r/g, '\n').replace(/\r/g, '\n');
+  lineBuffer += text;
+  streamBuffer += text; // for dataset extraction
+  const parts = lineBuffer.split('\n');
+  for (let i = 0; i < parts.length - 1; i++) {
+    appendTerm(parts[i] + '\n');
+  }
+  lineBuffer = parts[parts.length - 1];
+  tryExtractDatasetsFromBuffer();
+  refreshDatasetSelect();
+}
+
+async function sendRaw(data) {
+  if (!writer) { alert('연결 후 전송 가능합니다.'); return; }
+  try {
+    const encoded = new TextEncoder().encode(data);
+    await writer.write(encoded);
+    appendTerm('>> TX ' + JSON.stringify(Array.from(encoded)) + '\n');
+  } catch (e) {
+    setStatus('전송 실패: ' + (e.message || e));
+  }
+}
+
+async function sendText() {
+  const input = document.getElementById('tx');
+  const nl = document.getElementById('newline').value;
+  let data = input.value;
+  if (nl === 'CRLF') data += '\r\n';
+  else if (nl === 'CR') data += '\r';
+  else if (nl === 'LF') data += '\n';
+  await sendRaw(data);
+  input.value = '';
+  input.focus();
+}
+
+// Plot helpers
+function parseFftLinesFromTerminal() {
+  try { console.log('[parse] start'); } catch (_) {}
+  const status = (msg) => { try { console.log(msg); } catch(_) {} try { const el=document.getElementById('plotStatus'); if (el) el.textContent = msg; } catch(_) {} };
+  const text = document.getElementById('terminal').textContent || '';
+  const lines = text.split(/\n+/);
+
+  // 1) 가장 마지막 "Dump Start" 라인을 찾는다 (End가 아닌 Start 기준)
+  let startIdx = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const L = lines[i].trim();
+    if (L.startsWith('<<') && /start/i.test(L)) { startIdx = i; break; }
+  }
+
+  // 2) Start 이후 연속되는 숫자 콤마 라인만 수집. End나 공백/텍스트 만나면 중단
+  const rows = [];
+  if (startIdx !== -1) {
+    status(`[parse] start at line ${startIdx}`);
+    const dataLineRe = /^(\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)/;
+    for (let j = startIdx + 1; j < lines.length; j++) {
+      const line = (lines[j] || '').trim();
+      if (line.startsWith('<<')) break; // End 도달 시 종료
+      if (line === '') continue;        // 공백 라인은 무시
+      const m = line.match(dataLineRe);
+      if (!m) continue;                 // 기타 텍스트는 스킵
+      const idx = parseInt(m[1], 10);
+      const r = parseFloat(m[2]);
+      const i = parseFloat(m[3]);
+      const mag = parseFloat(m[4]);
+      if (Number.isFinite(idx) && Number.isFinite(r) && Number.isFinite(i) && Number.isFinite(mag)) {
+        rows.push([idx, r, i, mag]);
+      }
+    }
+  }
+
+  // 3) 보강: Start를 못 찾았을 때, 마지막으로 보이는 숫자 콤마 라인 덩어리를 수집
+  if (!rows.length) {
+    const dataLineRe = /^(\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)/;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (dataLineRe.test(lines[i])) { startIdx = i; break; }
+    }
+    if (startIdx !== -1) {
+      for (let j = startIdx; j < lines.length; j++) {
+        const m = (lines[j] || '').trim().match(dataLineRe);
+        if (!m) break;
+        rows.push([parseInt(m[1],10), parseFloat(m[2]), parseFloat(m[3]), parseFloat(m[4])]);
+      }
+    }
+  }
+
+  if (!rows.length) { status('[parse] no rows'); throw new Error("데이터를 찾을 수 없습니다. 'index,real,imag,mag' 형식의 라인이 필요합니다."); }
+  status(`[parse] rows=${rows.length}`);
+  return rows;
+}
+
+function makeFrequencyAxis(nPoints) {
+  const half = Math.floor(nPoints / 2);
+  const out = new Array(half);
+  for (let k = 0; k < half; k++) out[k] = k; // 데이터는 인덱스 좌표 유지
+  return out;
+}
+
+function applyAxes(ch, freq, values) {
+  const xl = (document.getElementById('xLabel')?.value || 'Index');
+  const yl = (document.getElementById('yLabel')?.value || 'Amplitude');
+  let xminDisp = parseFloat(document.getElementById('xMin')?.value);
+  let xmaxDisp = parseFloat(document.getElementById('xMax')?.value);
+  let yminDisp = parseFloat(document.getElementById('yMin')?.value);
+  let ymaxDisp = parseFloat(document.getElementById('yMax')?.value);
+  const xTickScale = parseFloat(document.getElementById('xScale')?.value) || 1;
+  const yTickScale = parseFloat(document.getElementById('yScale')?.value) || 1;
+
+  // 눈금 배율은 라벨에만 적용하고, 범위(min/max)는 데이터 단위를 그대로 사용
+  const xScale = { type: 'linear', title: { display: true, text: xl }, ticks: { callback: (v)=> (v * xTickScale).toFixed(3) } };
+  if (Number.isFinite(xminDisp)) xScale.min = xminDisp;
+  if (Number.isFinite(xmaxDisp)) xScale.max = xmaxDisp;
+  else if (!Number.isFinite(xmaxDisp) && Array.isArray(freq) && freq.length) xScale.max = freq[freq.length-1];
+
+  const yScale = { title: { display: true, text: yl }, ticks: { callback: (v)=> (v * yTickScale).toFixed(3) } };
+  if (Number.isFinite(yminDisp)) yScale.min = yminDisp;
+  if (Number.isFinite(ymaxDisp)) yScale.max = ymaxDisp;
+
+  ch.options.scales = { x: xScale, y: yScale };
+}
+
+function refreshDatasetSelect() {
+  const sel = document.getElementById('datasetSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  datasetList.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = `${d.id}: ${d.caption}`; sel.appendChild(opt);
+  });
+  if (sel.options.length) sel.selectedIndex = sel.options.length - 1;
+}
+
+function rebuildDatasetsFromTerminal() {
+  const text = document.getElementById('terminal').textContent || '';
+  const lines = text.split(/\n+/);
+  const capRe = /^\[Plot_(\d{4}):\s*(.*?)\]\s*$/;
+  let current = null; // {id, caption}
+  let buffer = '';
+  datasetList = [];
+  datasetCounter = 0;
+  streamBuffer = '';
+  for (let i = 0; i < lines.length; i++) {
+    const L = (lines[i]||'').trim();
+    const m = L.match(capRe);
+    if (m) { current = { id: `Plot_${m[1]}`, caption: m[2] }; continue; }
+    if (L.includes('DataStart') || L.includes('DataEnd') || /,/.test(L)) {
+      buffer += (buffer ? '\n' : '') + L; // accumulate contiguous lines if any
+      // When DataEnd appears, finalize
+      if (L.includes('DataEnd')) {
+        const s = buffer.indexOf('DataStart');
+        const e = buffer.lastIndexOf('DataEnd');
+        if (s >= 0 && e > s) {
+          const payload = buffer.substring(s + 'DataStart'.length + 1, e).replace(/\s+/g,'');
+          const parts = payload.split(',').filter(Boolean);
+          const values = parts.map(x=>Number(x)).filter(Number.isFinite);
+          const id = current && current.id ? current.id : `Plot_${String(datasetCounter).padStart(4,'0')}`;
+          const caption = current && current.caption ? current.caption : 'Dataset';
+          datasetList.push({ id, caption, values });
+          datasetCounter = Math.max(datasetCounter, parseInt(id.slice(-4),10)+1);
+        }
+        buffer = '';
+        current = null;
+      }
+    } else {
+      buffer = '';
+    }
+  }
+  refreshDatasetSelect();
+}
+
+function plotFromDataset() {
+  const sel = document.getElementById('datasetSelect');
+  if (!sel || !sel.value) { alert('데이터셋을 선택하세요.'); return; }
+  const ds = datasetList.find(d => d.id === sel.value);
+  if (!ds) { alert('선택한 데이터셋을 찾을 수 없습니다.'); return; }
+  plotMagnitudeArray(ds.values);
+}
+
+function applyAxes(ch, freq, values) {
+  const xl = (document.getElementById('xLabel')?.value || 'Index');
+  const yl = (document.getElementById('yLabel')?.value || 'Amplitude');
+  const xminDisp = parseFloat(document.getElementById('xMin')?.value);
+  const xmaxDisp = parseFloat(document.getElementById('xMax')?.value);
+  const yminDisp = parseFloat(document.getElementById('yMin')?.value);
+  const ymaxDisp = parseFloat(document.getElementById('yMax')?.value);
+  const xTickScale = parseFloat(document.getElementById('xScale')?.value) || 1;
+  const yTickScale = parseFloat(document.getElementById('yScale')?.value) || 1;
+  const xScale = {
+    type: 'linear',
+    title: { display: true, text: xl },
+    ticks: { callback: (v)=> (v * xTickScale).toFixed(0) }
+  };
+  if (Number.isFinite(xminDisp)) xScale.min = xminDisp;
+  if (Number.isFinite(xmaxDisp)) xScale.max = xmaxDisp;
+  const yScale = {
+    title: { display: true, text: yl },
+    ticks: { callback: (v)=> (v * yTickScale).toFixed(0) }
+  };
+  if (Number.isFinite(yminDisp)) yScale.min = yminDisp;
+  if (Number.isFinite(ymaxDisp)) yScale.max = ymaxDisp;
+  ch.options.scales = { x: xScale, y: yScale };
+}
+
+function autoScaleAxes() {
+  if (!chart) return;
+  try {
+    const ds = chart.data.datasets[0]?.data || [];
+    if (!ds.length) return;
+    const ys = ds.map(p => p.y).filter(Number.isFinite);
+    const xs = ds.map(p => p.x).filter(Number.isFinite);
+    if (!ys.length || !xs.length) return;
+    const ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const xmin = Math.min(...xs), xmax = Math.max(...xs);
+    const padY = (ymax - ymin) * 0.05;
+    // 입력칸은 데이터 단위 값으로 채움
+    document.getElementById('yMin').value = (ymin - padY).toFixed(3);
+    document.getElementById('yMax').value = (ymax + padY).toFixed(3);
+    document.getElementById('xMin').value = xmin.toFixed(3);
+    document.getElementById('xMax').value = xmax.toFixed(3);
+    applyAxes(chart, xs, ys);
+    chart.update();
+  } catch (e) { try { console.error('[autoScale] error', e); } catch(_) {} }
+}
+
+function plotMagnitudeArray(values) {
+  const N = values.length;
+  const freq = makeFrequencyAxis(N);
+  const half = Math.floor(N/2);
+  const magHalf = values.slice(0, half);
+  const ctx = document.getElementById('chart').getContext('2d');
+  const ch = ensureChart(ctx);
+  ch.data.labels = [];
+  const yScale = parseFloat(document.getElementById('yScale')?.value) || 1;
+  ch.data.datasets = [{ label: '', data: magHalf.map((y,i)=>({x:freq[i],y:y})), parsing:false, borderColor:'#2ca02c', pointRadius:0, tension:0, spanGaps:true, showLine:true }];
+  // 범례 제거
+  ch.options.plugins.legend.display = false;
+  applyAxes(ch, freq, magHalf);
+  ch.update();
+}
+
+function initPlaceholderPlot() {
+  try {
+    const ctx = document.getElementById('chart').getContext('2d');
+    const ch = ensureChart(ctx);
+    const N = 1024;
+    const zeros = new Array(N).fill(0);
+    plotMagnitudeArray(zeros);
+    const ps = document.getElementById('plotStatus'); if (ps) ps.textContent = '플롯 준비됨 (placeholder)';
+  } catch (_) {}
+}
+
+function ensureChart(ctx) {
+  if (chart) return chart;
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      animation: false,
+      parsing: false,
+      spanGaps: true,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { title(items){ try { const xs = parseFloat(document.getElementById('xScale')?.value)||1; const x = (items && items.length && items[0].parsed && Number.isFinite(items[0].parsed.x)) ? items[0].parsed.x : undefined; return (x!==undefined) ? (x*xs).toFixed(3) : ''; } catch(_) { return ''; } }, label(ctx){ try { const ys = parseFloat(document.getElementById('yScale')?.value)||1; const y = (ctx && ctx.parsed && Number.isFinite(ctx.parsed.y)) ? ctx.parsed.y : undefined; return (y!==undefined) ? (y*ys).toFixed(3) : ''; } catch(_) { return ''; } } } }, },
+      maintainAspectRatio: false,
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Index' } },
+        y: { title: { display: true, text: 'Amplitude' } }
+      }
+    }
+  });
+  return chart;
+}
+
+function plotHere() {
+  // 최신 데이터셋에서 magnitude만 플롯
+  const status = (msg) => { try { console.log(msg); } catch(_) {} try { const el=document.getElementById('plotStatus'); if (el) el.textContent = msg; } catch(_) {} };
+  let rows;
+  try { rows = parseFftLinesFromTerminal(); }
+  catch (e) { status('[plot] parse error: ' + (e.message||e)); alert(e.message || String(e)); return; }
+
+  // 인덱스를 기준으로 재배열하여 누락 인덱스는 NaN으로 채움
+  const maxIdx = rows.reduce((m, r) => Math.max(m, r[0]), -1);
+  const N = maxIdx + 1;
+  const real = new Array(N).fill(NaN);
+  const imag = new Array(N).fill(NaN);
+  const mag  = new Array(N).fill(NaN);
+  for (const [idx, r, i, m] of rows) {
+    if (idx >= 0 && idx < N) { real[idx] = r; imag[idx] = i; mag[idx] = m; }
+  }
+
+  const freq = makeFrequencyAxis(N);
+
+  const ctx = document.getElementById('chart').getContext('2d');
+  const ch = ensureChart(ctx);
+  const half = Math.floor(N/2);
+  const magHalf  = mag.slice(0, half).map(v => Number.isFinite(v) ? +v : NaN);
+
+  ch.data.labels = [];
+  const yScale = parseFloat(document.getElementById('yScale')?.value) || 1;
+  ch.data.datasets = [{ label: '', data: magHalf.map((y,i)=>({x:freq[i],y:y})), parsing:false, borderColor:'#2ca02c', pointRadius:0, tension:0, spanGaps:true, showLine:true }];
+  ch.options.plugins.legend.display = false;
+  applyAxes(ch, freq, magHalf);
+  ch.update();
+}
+
+function plotInNewWindow() {
+  let rows;
+  try { rows = parseFftLinesFromTerminal(); }
+  catch (e) { alert(e.message || String(e)); return; }
+  const N = rows.length;
+  const Fs = Number(document.getElementById('fs').value);
+  if (!(Number.isFinite(Fs) && Fs > 0)) { alert('샘플링 레이트(Fs)를 올바르게 입력하세요.'); return; }
+  const freq = makeFrequencyAxis(Fs, N);
+  const real = rows.map(r => r[1]).slice(0, Math.floor(N/2));
+  const imag = rows.map(r => r[2]).slice(0, Math.floor(N/2));
+  const mag  = rows.map(r => r[3]).slice(0, Math.floor(N/2));
+  const showReal = document.getElementById('showReal').checked;
+  const showImag = document.getElementById('showImag').checked;
+  const showMag  = document.getElementById('showMag').checked;
+  const win = window.open('', '_blank');
+  if (!win) { alert('팝업이 차단되었습니다. 새창 허용 후 다시 시도하세요.'); return; }
+  const tpl = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FFT Plot</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script></head><body>
+  <h3 style="font-family:Arial, sans-serif; margin:12px 16px;">FFT Plot</h3>
+  <div style="padding:0 16px;">
+  <canvas id="c" height="240"></canvas>
+  </div>
+  <script>
+  const labels = ${JSON.stringify(freq)};
+  const real = ${JSON.stringify(real)};
+  const imag = ${JSON.stringify(imag)};
+  const mag  = ${JSON.stringify(mag)};
+  const showReal = ${JSON.stringify(showReal)};
+  const showImag = ${JSON.stringify(showImag)};
+  const showMag  = ${JSON.stringify(showMag)};
+  const ctx = document.getElementById('c').getContext('2d');
+  const ds = [];
+  if (showReal) ds.push({ label: 'Real', data: real, borderColor: '#1f77b4', pointRadius: 0, tension: 0 });
+  if (showImag) ds.push({ label: 'Imag', data: imag, borderColor: '#ff7f0e', pointRadius: 0, tension: 0 });
+  if (showMag)  ds.push({ label: 'Magnitude', data: mag, borderColor: '#2ca02c', pointRadius: 0, tension: 0 });
+  new Chart(ctx, { type:'line', data:{ labels, datasets: ds }, options:{ responsive:true, animation:false, parsing:false, scales:{ x:{ title:{ display:true, text:'Frequency (MHz)'} }, y:{ title:{ display:true, text:'Amplitude'} } } } });
+  <\/script>
+  </body></html>`;
+  win.document.open();
+  win.document.write(tpl);
+  win.document.close();
+}
+
+function copyTerminal() {
+  const text = document.getElementById('terminal').textContent || '';
+  navigator.clipboard.writeText(text).then(()=>setStatus('터미널 복사 완료')).catch(()=>alert('복사 실패'));
+}
+function importTerminal() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.txt,.log,.csv,text/plain';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const text = await file.text();
+    appendTerm(text);
+    streamBuffer += text;
+    tryExtractDatasetsFromBuffer();
+    refreshDatasetSelect();
+  };
+  input.click();
+}
+
+function saveTerminal() {
+  const text = document.getElementById('terminal').textContent || '';
+  const blob = new Blob([text], {type:'text/plain'});
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g,'-');
+  a.href = URL.createObjectURL(blob);
+  a.download = `web-terminal-${ts}.txt`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setStatus('터미널 저장 완료');
+}
+
+function saveVizToFile() {
+  const lines = [];
+  const pushKV = (k, v) => lines.push(`${k}=${v}`);
+  pushKV('xLabel', document.getElementById('xLabel')?.value || '');
+  pushKV('xMin', document.getElementById('xMin')?.value || '');
+  pushKV('xMax', document.getElementById('xMax')?.value || '');
+  pushKV('xScale', document.getElementById('xScale')?.value || '1');
+  pushKV('yLabel', document.getElementById('yLabel')?.value || '');
+  pushKV('yMin', document.getElementById('yMin')?.value || '');
+  pushKV('yMax', document.getElementById('yMax')?.value || '');
+  pushKV('yScale', document.getElementById('yScale')?.value || '1');
+  const blob = new Blob([lines.join('\n') + '\n'], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'webterm_viz.txt';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function loadVizFromFile() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.txt,text/plain';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const map = {};
+    text.split(/\r?\n/).forEach(line => {
+      const m = line.match(/^\s*([a-zA-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m) map[m[1]] = m[2];
+    });
+    const setIf = (id, key) => { if (map[key] !== undefined) document.getElementById(id).value = map[key]; };
+    setIf('xLabel','xLabel'); setIf('xMin','xMin'); setIf('xMax','xMax'); setIf('xScale','xScale');
+    setIf('yLabel','yLabel'); setIf('yMin','yMin'); setIf('yMax','yMax'); setIf('yScale','yScale');
+    if (chart) { plotFromDataset(); }
+  };
+  input.click();
+}
+
+function saveVizSettings() {
+  const s = {
+    xLabel: document.getElementById('xLabel')?.value || '',
+    xMin: document.getElementById('xMin')?.value || '',
+    xMax: document.getElementById('xMax')?.value || '',
+    xScale: document.getElementById('xScale')?.value || '1',
+    xOffset: document.getElementById('xOffset')?.value || '0',
+    yLabel: document.getElementById('yLabel')?.value || '',
+    yMin: document.getElementById('yMin')?.value || '',
+    yMax: document.getElementById('yMax')?.value || ''
+  };
+  try { localStorage.setItem('webterm_viz', JSON.stringify(s)); } catch(_) {}
+}
+function loadVizSettings() { /* 로컬스토리지 사용 제거 - no-op */ }
+
+function downloadHeaders() {
+  const readme = `WebTerminal 사용 가이드 (Vitis/Zynq)
+
+1) 파일 복사
+- WebTerminal.h, WebTerminal.c를 Vitis 프로젝트의 src 폴더에 추가합니다.
+- main.cpp에서 \"WebTerminal.h\"를 include 하세요.
+
+2) 빌드 설정
+- 추가 설정은 필요 없습니다. UART 출력(xil_printf)이 활성화되어 있어야 합니다.
+
+3) 사용 방법
+- 배열에 데이터(예: FFT magnitude)를 채운 뒤 WebTerm_PrintDataset을 호출합니다.
+
+  #include \"WebTerminal.h\"\n  int32_t mag[1024];\n  // ... mag 채우기 ...\n  WebTerm_PrintDataset(\"ADC1/Q2 FFT\", mag, 1024);
+
+- 출력 포맷(웹과 연동):
+  [Plot_XXXX: Caption]\r\n
+  DataStart,1,2,3,...,N,DataEnd\r\n
+- 카운터를 초기화하려면 부팅 시 또는 필요 시 WebTerm_ResetCounter()를 호출합니다.
+
+4) 웹 측 사용
+- 페이지 상단에서 헤더 파일을 다운로드하여 펌웨어에 반영합니다.
+- 브라우저에서 연결 → 명령 전송(예: 4) → 데이터셋 콤보에서 Plot_XXXX 선택 후 플롯.
+
+5) 팁
+- 긴 라인 전송은 .c 내부에서 안전하게 청크로 처리됩니다.
+- 캡션은 콤보박스에 그대로 반영되므로 구분 가능한 설명을 사용하세요.
+`;
+
+  const h = `#pragma once\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nvoid WebTerm_ResetCounter(void);\nvoid WebTerm_PrintDataset(const char* caption, const int32_t* data, size_t length);\n#ifdef __cplusplus\n}\n#endif\n`;
+  const c = `#include \"WebTerminal.h\"\n#include \"xil_printf.h\"\nstatic uint32_t g_plotCounter=0;\nvoid WebTerm_ResetCounter(void){g_plotCounter=0;}\nstatic void WebTerm_PrintCommaSeparated(const int32_t* data, size_t length){const size_t chunk=64;size_t idx=0;while(idx<length){size_t end=idx+chunk; if(end>length) end=length; for(size_t i=idx;i<end;++i){xil_printf(\"%d\",data[i]); if(i!=length-1) xil_printf(\",\");} idx=end;}}\nvoid WebTerm_PrintDataset(const char* caption,const int32_t* data,size_t length){xil_printf(\"[Plot_%04lu: %s]\\r\\n\",(unsigned long)g_plotCounter,(caption?caption:\"\"));xil_printf(\"DataStart,\");WebTerm_PrintCommaSeparated(data,length);xil_printf(\",DataEnd\\r\\n\");g_plotCounter++;}\n`;
+  const save = (name, content) => { const blob = new Blob([content], {type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
+  save('WebTerminal.h', h); save('WebTerminal.c', c); save('WebTerminal_README.txt', readme);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // 포트 콤보 이벤트 제거
+  document.getElementById('btnRequest').addEventListener('click', requestPort);
+  document.getElementById('btnConnect').addEventListener('click', connect);
+  document.getElementById('btnDisconnect').addEventListener('click', disconnect);
+  document.getElementById('btnClear').addEventListener('click', clearTerminal);
+  document.getElementById('btnCopy').addEventListener('click', copyTerminal);
+  document.getElementById('btnSave').addEventListener('click', saveTerminal);
+  document.getElementById('btnImport').addEventListener('click', importTerminal);
+  document.getElementById('editableToggle').addEventListener('change', (e)=>{
+    const term = document.getElementById('terminal');
+    term.contentEditable = e.target.checked ? 'true' : 'false';
+    // 콘텐츠 편집 후 데이터셋 목록 재구성
+    if (!e.target.checked) rebuildDatasetsFromTerminal();
+  });
+  document.getElementById('btnSend').addEventListener('click', sendText);
+  const syncAutoPlot = (checked)=>{ try { const a=document.getElementById('autoPlot'); if(a) a.checked=!!checked; } catch(_){} };
+  const apFloat = document.getElementById('autoPlotFloating');
+  if (apFloat) apFloat.addEventListener('change', (e)=>{ syncAutoPlot(e.target.checked); });
+  const apHidden = document.getElementById('autoPlot');
+  if (apHidden) apHidden.addEventListener('change', (e)=>{ if(apFloat) apFloat.checked = e.target.checked; });
+  document.getElementById('btnAutoScale').addEventListener('click', autoScaleAxes);
+  const reapply = ()=>{ if(chart){ applyAxes(chart, chart.data?.datasets?.[0]?.data?.map(p=>p.x) || [], null); chart.update(); } };
+  document.getElementById('xLabel').addEventListener('change', reapply);
+  document.getElementById('yLabel').addEventListener('change', reapply);
+  document.getElementById('xMin').addEventListener('change', reapply);
+  document.getElementById('xMax').addEventListener('change', reapply);
+  document.getElementById('yMin').addEventListener('change', reapply);
+  document.getElementById('yMax').addEventListener('change', reapply);
+  const onScaleInput = ()=>{ reapply(); autoScaleAxes(); };
+  document.getElementById('xScale').addEventListener('change', onScaleInput);
+  document.getElementById('yScale').addEventListener('change', onScaleInput);
+  document.getElementById('xScale').addEventListener('input', onScaleInput);
+  document.getElementById('yScale').addEventListener('input', onScaleInput);
+  document.getElementById('btnSaveViz').addEventListener('click', saveVizToFile);
+  document.getElementById('btnLoadViz').addEventListener('click', loadVizFromFile);
+  document.getElementById('downloadHeaders').addEventListener('click', (e)=>{ e.preventDefault(); downloadHeaders(); });
+  // 초기 placeholder 그래프 그리기
+  initPlaceholderPlot();
+  // 초기 축 범위/라벨 설정 적용
+  try { const ch = chart; if (ch) { applyAxes(ch, [], []); ch.update(); } } catch(_) {}
+  document.getElementById('btnPlotSelected').addEventListener('click', () => plotFromDataset());
+  // 설정 로드
+  loadVizSettings();
+  const tx = document.getElementById('tx');
+  tx.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && document.getElementById('enterSend').checked) {
+      ev.preventDefault();
+      sendText();
+    }
+  });
+});
+</script>
+</body>
+</html>
