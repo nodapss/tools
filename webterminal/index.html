@@ -11,22 +11,22 @@
 <div class="container">
   <div class="header" style="position:relative;">
     <h2>Web Terminal</h2>
-    <p class="small" style="margin:4px 0 0 0;">Chrome/Edge에서 사용하세요. 보드의 UART 장치를 선택해 연결합니다.</p>
+    <p class="small" style="margin:4px 0 0 0;">Chrome/Edge?�서 ?�용?�세?? 보드??UART ?�치�??�택???�결?�니??</p>
     <div style="position:absolute; right:16px; bottom:8px;">
-      <a href="https://nodapss.github.io/tools/webterminal/#" id="downloadHeaders" style="color:#fff; text-decoration:underline;">WebTerminal 라이브러리 다운로드</a>
+      <a href="https://nodapss.github.io/tools/webterminal/#" id="downloadHeaders" style="color:#fff; text-decoration:underline;">WebTerminal ?�이브러�??�운로드</a>
     </div>
   </div>
 
   <div class="splitter">
 
-    <!-- 1) 포트 연결 섹션 -->
+    <!-- 1) ?�트 ?�결 ?�션 -->
     <div class="section" id="sec-connect">
-      <h3>포트 연결</h3>
-      <button class="toggle" id="tg-connect">접기</button>
+      <h3>?�트 ?�결</h3>
+      <button class="toggle" id="tg-connect">?�기</button>
       <div class="row compact">
-        <button id="btnRequest">포트 선택</button>
-        <button id="btnConnect" disabled>연결</button>
-        <button id="btnDisconnect" class="secondary" disabled>해제</button>
+        <button id="btnRequest">?�트 ?�택</button>
+        <button id="btnConnect" disabled>?�결</button>
+        <button id="btnDisconnect" class="secondary" disabled>?�제</button>
         <label>Baud:
           <select id="baud">
             <option selected>115200</option>
@@ -35,119 +35,119 @@
             <option>921600</option>
           </select>
         </label>
-        <label>데이터비트:
+        <label>?�이?�비??
           <select id="dataBits">
             <option value="8" selected>8</option>
             <option value="7">7</option>
           </select>
         </label>
-        <label>패리티:
+        <label>?�리??
           <select id="parity">
             <option value="none" selected>None</option>
             <option value="even">Even</option>
             <option value="odd">Odd</option>
           </select>
         </label>
-        <label>스톱비트:
+        <label>?�톱비트:
           <select id="stopBits">
             <option value="1" selected>1</option>
             <option value="2">2</option>
           </select>
         </label>
-        <label>플로우:
+        <label>?�로??
           <select id="flow" style="min-width: 120px;">
             <option value="none" selected>None</option>
             <option value="hardware">RTS/CTS (HW)</option>
           </select>
         </label>
       </div>
-      <div id="status" class="status">대기 중</div>
+      <div id="status" class="status">?��?�?/div>
     </div>
 
     <div class="gutter"></div>
 
-    <!-- 2) 터미널 섹션 (위) -->
+    <!-- 2) ?��????�션 (?? -->
     <div class="section" id="sec-terminal">
       <div>
-        <h3 style="margin:0;">터미널</h3>
-        <button class="toggle" id="tg-terminal" style="position:absolute; right:8px; top:8px;">접기</button>
+        <h3 style="margin:0;">?��???/h3>
+        <button class="toggle" id="tg-terminal" style="position:absolute; right:8px; top:8px;">?�기</button>
         <div style="display:flex; gap:6px; align-items:center; margin: 4px 0 4px auto; justify-content:flex-end;">
           <label>개행:
             <select id="newline" style="min-width: 100px;">
               <option value="CRLF">CRLF (\r\n)</option>
               <option value="CR" selected>CR (\r)</option>
               <option value="LF">LF (\n)</option>
-              <option value="NONE">없음</option>
+              <option value="NONE">?�음</option>
             </select>
           </label>
-          <button id="btnImport" class="secondary">불러오기</button>
-          <button id="btnCopy" class="secondary">전체 복사</button>
-          <button id="btnSave" class="secondary">저장</button>
+          <button id="btnImport" class="secondary">불러?�기</button>
+          <button id="btnCopy" class="secondary">?�체 복사</button>
+          <button id="btnSave" class="secondary">?�??/button>
         </div>
       </div>
       <div class="terminal-wrap">
-        <label class="term-edit"><input type="checkbox" id="editableToggle"> 편집</label>
+        <label class="term-edit"><input type="checkbox" id="editableToggle"> ?�집</label>
         <div id="terminal" class="terminal"></div>
       </div>
       <div class="row" style="margin-top:6px;">
-        <label><input type="checkbox" id="enterSend" checked> Enter로 전송</label>
+        <label><input type="checkbox" id="enterSend" checked> Enter�??�송</label>
       </div>
       <div class="input-row">
-        <input id="tx" type="text" placeholder="명령을 입력하세요...">
-        <button id="btnSend">전송</button>
-        <button id="btnClear" class="secondary">터미널 지우기</button>
+        <input id="tx" type="text" placeholder="명령???�력?�세??..">
+        <button id="btnSend">?�송</button>
+        <button id="btnClear" class="secondary">?��???지?�기</button>
       </div>
     </div>
 
     <div class="gutter"></div>
 
-    <!-- 3) 시각화 섹션 (아래) -->
+    <!-- 3) ?�각???�션 (?�래) -->
     <div class="section" id="sec-plot">
-      <h3>시각화</h3>
-      <button class="toggle" id="tg-plot">접기</button>
+      <h3>?�각??/h3>
+      <button class="toggle" id="tg-plot">?�기</button>
       <div class="row compact btn-row" style="margin-top:4px;">
-        <label>데이터1: <select id="datasetSelect" style="min-width:240px;"></select></label>
-        <label>데이터2: <select id="datasetSelect2" style="min-width:240px;"></select></label>
-        <button id="btnPlotSelected" class="secondary">선택 플롯</button>
-        <button id="btnAutoScale" class="secondary">자동축설정</button>
-        <button id="btnLoadViz" class="secondary">설정불러오기</button>
-        <button id="btnSaveViz" class="secondary">설정저장</button>
-        <label style="margin-left:10px; display:none;"><input type="checkbox" id="autoPlot" checked> 최근수신</label>
+        <label>?�이??: <select id="datasetSelect" style="min-width:240px;"></select></label>
+        <label>?�이??: <select id="datasetSelect2" style="min-width:240px;"></select></label>
+        <button id="btnPlotSelected" class="secondary">?�택 ?�롯</button>
+        <button id="btnAutoScale" class="secondary">?�동축설??/button>
+        <button id="btnLoadViz" class="secondary">?�정불러?�기</button>
+        <button id="btnSaveViz" class="secondary">?�정?�??/button>
+        <label style="margin-left:10px; display:none;"><input type="checkbox" id="autoPlot" checked> 최근?�신</label>
       </div>
       <div class="canvas-wrap" style="width:100%; display:flex; justify-content:center; height:560px; margin-top:10px; position:relative;">
         <label class="term-edit"><input type="checkbox" id="autoPlotFloating" checked> 갱신</label>
         <canvas id="chart" style="max-width: 1280px; width: 1280px; height: 560px; display: block; box-sizing: border-box;" width="1280" height="560"></canvas>
       </div>
       <div class="controls-grid">
-        <div class="ctl"><label style="margin-right:6px;"><input type="checkbox" id="keepX"> 유지</label><span class="lab">X라벨:</span><input id="xLabel" type="text" value="Time Line" style="width:140px;"></div>
+        <div class="ctl"><label style="margin-right:6px;"><input type="checkbox" id="keepX"> ?��?</label><span class="lab">X?�벨:</span><input id="xLabel" type="text" value="Time Line" style="width:140px;"></div>
         <div class="ctl"><span class="lab">Xmin:</span><input id="xMin" type="number" value="0" style="width:120px;"></div>
         <div class="ctl"><span class="lab">Xmax:</span><input id="xMax" type="number" value="511" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">X눈금:</span><input id="xScale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
+        <div class="ctl"><span class="lab">X?�금:</span><input id="xScale" type="number" value="1" step="any" style="width:120px;" title="�??�금 배율(?�이??고정)"></div>
       </div>
       <div class="controls-grid" style="margin-top:6px;">
-        <div class="ctl"><label style="margin-right:6px;"><input type="checkbox" id="keepY1"> 유지</label><span class="lab">Y1라벨:</span><input id="yLabel" type="text" value="Signal" style="width:140px;"></div>
+        <div class="ctl"><label style="margin-right:6px;"><input type="checkbox" id="keepY1"> ?��?</label><span class="lab">Y1?�벨:</span><input id="yLabel" type="text" value="Signal" style="width:140px;"></div>
         <div class="ctl"><span class="lab">Y1min:</span><input id="yMin" type="number" value="0" style="width:120px;"></div>
         <div class="ctl"><span class="lab">Y1max:</span><input id="yMax" type="number" value="1000" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">Y1눈금:</span><input id="yScale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
+        <div class="ctl"><span class="lab">Y1?�금:</span><input id="yScale" type="number" value="1" step="any" style="width:120px;" title="�??�금 배율(?�이??고정)"></div>
       </div>
       <div class="controls-grid" style="margin-top:6px;">
-        <div class="ctl"><label style="margin-right:6px;"><input type="checkbox" id="keepY2"> 유지</label><span class="lab">Y2라벨:</span><input id="y2Label" type="text" value="Signal 2" style="width:140px;"></div>
+        <div class="ctl"><label style="margin-right:6px;"><input type="checkbox" id="keepY2"> ?��?</label><span class="lab">Y2?�벨:</span><input id="y2Label" type="text" value="Signal 2" style="width:140px;"></div>
         <div class="ctl"><span class="lab">Y2min:</span><input id="y2Min" type="number" style="width:120px;"></div>
         <div class="ctl"><span class="lab">Y2max:</span><input id="y2Max" type="number" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">Y2눈금:</span><input id="y2Scale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
+        <div class="ctl"><span class="lab">Y2?�금:</span><input id="y2Scale" type="number" value="1" step="any" style="width:120px;" title="�??�금 배율(?�이??고정)"></div>
       </div>
-      <p id="plotStatus" class="small" style="color:#666;">플롯 준비됨 (placeholder)</p>
-      <p class="small">터미널에 출력된 "index,real,imag,mag" 라인을 자동 추출하여 플롯합니다.</p>
+      <p id="plotStatus" class="small" style="color:#666;">?�롯 준비됨 (placeholder)</p>
+      <p class="small">?��??�에 출력??"index,real,imag,mag" ?�인???�동 추출?�여 ?�롯?�니??</p>
     </div>
 
     <div class="gutter"></div>
 
-    <!-- 4) 분석 섹션 -->
+    <!-- 4) 분석 ?�션 -->
     <div class="section" id="sec-analysis">
       <h3>분석</h3>
-      <button class="toggle" id="tg-analysis">접기</button>
+      <button class="toggle" id="tg-analysis">?�기</button>
       <div class="row compact btn-row" style="margin-top:4px;">
-        <button id="btnAnalyze" class="secondary">재계산</button>
+        <button id="btnAnalyze" class="secondary">?�계??/button>
       </div>
       <div class="controls-grid" style="margin-top:6px;">
         <div class="ctl"><span class="lab">Ch1 Max:</span><input id="anCh1Max" type="text" style="width:140px;" readonly></div>
