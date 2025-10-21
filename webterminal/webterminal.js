@@ -1,182 +1,3 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Web Terminal + Plot</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', Arial, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
-.container { max-width: 1400px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 16px 32px rgba(0,0,0,0.12); overflow: hidden; }
-.header { background: linear-gradient(135deg, #2196F3, #21CBF3); color: #fff; padding: 12px 16px; border-bottom: none; }
-.header h2 { margin: 0; font-size: 18px; font-weight: 700; }
-.splitter { display: block; padding: 12px 16px; }
-.gutter { height: 8px; background: #f2f2f2; margin: 10px 0; border-radius: 6px; }
-.section { background: #fff; border: 2px solid #e0e0e0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-.section h3 { margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #333; }
-.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.row.compact { gap: 4px; }
-.controls-row { display:flex; justify-content:flex-end; gap:12px; align-items:center; }
-.controls-row label { display:flex; align-items:center; gap:6px; }
-.controls-grid { display:grid; grid-auto-flow:column; grid-auto-columns:max-content; column-gap:12px; align-items:center; justify-content:end; }
-.controls-grid .ctl { display:flex; align-items:center; gap:6px; }
-.controls-grid .lab { display:inline-block; width:60px; text-align:right; }
-#sec-connect .row label, #sec-connect .row select, #sec-connect .row button { font-size: 12px; }
-button { padding: 6px 10px; font-size: 12px; cursor: pointer; transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .02s linear; height: 28px; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
-button:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-button:active { transform: translateY(1px); }
-button:focus { outline: 2px solid #90caf9; outline-offset: 1px; }
-button.secondary { background: #f3f3f3; border: 1px solid #ccc; }
-button.secondary:hover { background: #eaeaea; border-color: #bdbdbd; }
-button.secondary:active { background: #e0e0e0; }
-.status { margin: 6px 0; color: #0a6; font-size: 12px; }
-.small { font-size: 12px; color: #eef; }
-.terminal { background: #0b0b0b; color: #e8e8e8; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; padding: 8px; height: 320px; overflow-y: auto; overflow-x: hidden; white-space: pre-wrap; border-radius: 6px; border: 1px solid #333; }
-.terminal-wrap { position: relative; }
-.term-edit { position: absolute; right: 28px; top: 8px; color: #fff; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); padding: 2px 6px; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 4px; z-index: 5; }
-.input-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-top: 6px; }
-input[type="text"], input[type="number"] { padding: 4px 6px; font-size: 12px; }
-select { padding: 2px 6px; font-size: 12px; }
-label { white-space: nowrap; }
-.canvas-wrap { height: 420px; position: relative; }
-/* 그래프 우상단 플로팅 체크박스 - 터미널 편집과 동일 크기/위치 */
-.canvas-wrap .term-edit { position: absolute; right: 28px; top: 8px; color: #fff; background: rgba(0,0,0,0.6); border: 1px solid rgba(0,0,0,0.6); box-shadow: 0 2px 6px rgba(0,0,0,0.15); display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font-size: 12px; white-space: nowrap; width: auto; border-radius: 4px; }
-
-/* 우측 버튼/컨트롤 정렬 간격 통일 */
-.btn-row { align-items: center; justify-content: flex-end; gap: 10px; }
-#chart { width: 100%; height: 100%; }
-</style>
-</head>
-<body>
-<div class="container">
-  <div class="header" style="position:relative;">
-    <h2>Web Terminal</h2>
-    <p class="small" style="margin:4px 0 0 0;">Chrome/Edge에서 사용하세요. 보드의 UART 장치를 선택해 연결합니다.</p>
-    <div style="position:absolute; right:16px; bottom:8px;">
-      <a href="#" id="downloadHeaders" style="color:#fff; text-decoration:underline;">WebTerminal 라이브러리 다운로드</a>
-    </div>
-  </div>
-
-  <div class="splitter">
-
-    <!-- 1) 포트 연결 섹션 -->
-    <div class="section" id="sec-connect">
-      <h3>포트 연결</h3>
-      <div class="row compact">
-        <button id="btnRequest">포트 선택</button>
-        <button id="btnConnect" disabled>연결</button>
-        <button id="btnDisconnect" class="secondary" disabled>해제</button>
-        <label>Baud:
-          <select id="baud">
-            <option selected>115200</option>
-            <option>230400</option>
-            <option>460800</option>
-            <option>921600</option>
-          </select>
-        </label>
-        <label>데이터비트:
-          <select id="dataBits">
-            <option value="8" selected>8</option>
-            <option value="7">7</option>
-          </select>
-        </label>
-        <label>패리티:
-          <select id="parity">
-            <option value="none" selected>None</option>
-            <option value="even">Even</option>
-            <option value="odd">Odd</option>
-          </select>
-        </label>
-        <label>스톱비트:
-          <select id="stopBits">
-            <option value="1" selected>1</option>
-            <option value="2">2</option>
-          </select>
-        </label>
-        <label>플로우:
-          <select id="flow" style="min-width: 120px;">
-            <option value="none" selected>None</option>
-            <option value="hardware">RTS/CTS (HW)</option>
-          </select>
-        </label>
-      </div>
-      <div id="status" class="status">대기 중</div>
-    </div>
-
-    <div class="gutter"></div>
-
-    <!-- 2) 터미널 섹션 (위) -->
-    <div class="section" id="sec-terminal">
-      <div>
-        <h3 style="margin:0;">터미널</h3>
-        <div style="display:flex; gap:6px; align-items:center; margin: 4px 0 4px auto; justify-content:flex-end;">
-          <label>개행:
-            <select id="newline" style="min-width: 100px;">
-              <option value="CRLF">CRLF (\r\n)</option>
-              <option value="CR" selected>CR (\r)</option>
-              <option value="LF">LF (\n)</option>
-              <option value="NONE">없음</option>
-            </select>
-          </label>
-          <button id="btnImport" class="secondary">불러오기</button>
-          <button id="btnCopy" class="secondary">전체 복사</button>
-          <button id="btnSave" class="secondary">저장</button>
-        </div>
-      </div>
-      <div class="terminal-wrap">
-        <label class="term-edit"><input type="checkbox" id="editableToggle"> 편집</label>
-        <div id="terminal" class="terminal"></div>
-      </div>
-      <div class="row" style="margin-top:6px;">
-        <label><input type="checkbox" id="enterSend" checked> Enter로 전송</label>
-      </div>
-      <div class="input-row">
-        <input id="tx" type="text" placeholder="명령을 입력하세요...">
-        <button id="btnSend">전송</button>
-        <button id="btnClear" class="secondary">터미널 지우기</button>
-      </div>
-    </div>
-
-    <div class="gutter"></div>
-
-    <!-- 3) 시각화 섹션 (아래) -->
-    <div class="section" id="sec-plot">
-      <h3>시각화</h3>
-      <div class="row compact btn-row" style="margin-top:4px;">
-        <label>데이터셋: <select id="datasetSelect" style="min-width:260px;"></select></label>
-        <button id="btnPlotSelected" class="secondary">선택 플롯</button>
-        <button id="btnAutoScale" class="secondary">자동축설정</button>
-        <button id="btnLoadViz" class="secondary">설정불러오기</button>
-        <button id="btnSaveViz" class="secondary">설정저장</button>
-        <label style="margin-left:10px; display:none;"><input type="checkbox" id="autoPlot" checked> 최근수신</label>
-      </div>
-      <div class="canvas-wrap" style="width:100%; display:flex; justify-content:center; height:560px; margin-top:10px; position:relative;">
-        <label class="term-edit"><input type="checkbox" id="autoPlotFloating" checked> 갱신</label>
-        <canvas id="chart" style="max-width: 1280px; width:100%; height:100%;"></canvas>
-      </div>
-      <div class="controls-grid">
-        <div class="ctl"><span class="lab">X라벨:</span><input id="xLabel" type="text" value="Time Line" style="width:140px;"></div>
-        <div class="ctl"><span class="lab">Xmin:</span><input id="xMin" type="number" value="0" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">Xmax:</span><input id="xMax" type="number" value="511" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">X눈금:</span><input id="xScale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
-      </div>
-      <div class="controls-grid" style="margin-top:6px;">
-        <div class="ctl"><span class="lab">Y라벨:</span><input id="yLabel" type="text" value="Signal" style="width:140px;"></div>
-        <div class="ctl"><span class="lab">Ymin:</span><input id="yMin" type="number" value="0" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">Ymax:</span><input id="yMax" type="number" value="1000" style="width:120px;"></div>
-        <div class="ctl"><span class="lab">Y눈금:</span><input id="yScale" type="number" value="1" step="any" style="width:120px;" title="축 눈금 배율(데이터 고정)"></div>
-      </div>
-      <p id="plotStatus" class="small" style="color:#666;">준비됨: 터미널의 최신 FFT 블록을 파싱하여 플롯합니다.</p>
-      <p class="small">터미널에 출력된 "index,real,imag,mag" 라인을 자동 추출하여 플롯합니다.</p>
-    </div>
-
-    <div class="gutter"></div>
-
-
-  </div>
-</div>
-
-<script>
 let selectedPort = null;
 let reader = null;
 let writer = null;
@@ -188,6 +9,8 @@ let datasetList = []; // {id,label,values,caption}
 let streamBuffer = '';
 let pendingCaption = null; // {id, caption}
 let lastAction = '';
+// Request larger serial ring buffer from browser (if supported by Web Serial)
+const SERIAL_BUFFER_SIZE = 1024 * 1024; // 1 MiB
 
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 function appendTerm(text) {
@@ -222,7 +45,8 @@ async function connect() {
   const flow = document.getElementById('flow').value;
   const flowControl = flow === 'hardware' ? 'hardware' : undefined;
   try {
-    await selectedPort.open({ baudRate: baud, dataBits, parity, stopBits, flowControl });
+    // Note: bufferSize is best-effort; browsers may ignore if unsupported
+    await selectedPort.open({ baudRate: baud, dataBits, parity, stopBits, flowControl, bufferSize: SERIAL_BUFFER_SIZE });
     writer = selectedPort.writable.getWriter();
     startReadLoop();
     setStatus(`연결됨 @ ${baud}bps, ${dataBits}${parity[0].toUpperCase()}${stopBits}`);
@@ -318,6 +142,7 @@ function tryExtractDatasetsFromBuffer() {
     const caption = pendingCaption && pendingCaption.caption ? pendingCaption.caption : `Dataset`;
     const label = `${id}: ${caption}`;
     datasetList.push({ id, label, caption, values });
+    try { console.debug('[webterm] dataset parsed', { id, caption, length: values.length }); } catch(_) {}
     if (!pendingCaption) datasetCounter += 1; // if caption absent, advance internal counter
     pendingCaption = null;
     // shrink buffer to after DataEnd
@@ -327,8 +152,11 @@ function tryExtractDatasetsFromBuffer() {
       if (document.getElementById('autoPlot')?.checked) {
         const sel = document.getElementById('datasetSelect');
         if (sel) { sel.value = id; }
-        plotMagnitudeArray(values);
-        // autoscale after plotting
+        const isTimeCap = /^TIME_/i.test(caption || '');
+        try { console.debug('[webterm] autoPlot', { id, caption, isTimeCap, length: values.length }); } catch(_) {}
+        // Directly plot with explicit fullForTime flag to avoid race on select value
+        plotMagnitudeDual(values, null, { fullForTime: isTimeCap });
+        // autoscale after plotting (respect keepX/keepY1/keepY2)
         try { autoScaleAxes(); } catch(_) {}
       }
     } catch (_) {}
@@ -433,38 +261,65 @@ function makeFrequencyAxis(nPoints) {
   return out;
 }
 
-function applyAxes(ch, freq, values) {
+function applyAxes(ch, freq, values, opts = {}) {
   const xl = (document.getElementById('xLabel')?.value || 'Index');
   const yl = (document.getElementById('yLabel')?.value || 'Amplitude');
-  let xminDisp = parseFloat(document.getElementById('xMin')?.value);
-  let xmaxDisp = parseFloat(document.getElementById('xMax')?.value);
-  let yminDisp = parseFloat(document.getElementById('yMin')?.value);
-  let ymaxDisp = parseFloat(document.getElementById('yMax')?.value);
+  const y2l = (document.getElementById('y2Label')?.value || 'Amplitude 2');
+  const xminDisp = parseFloat(document.getElementById('xMin')?.value);
+  const xmaxDisp = parseFloat(document.getElementById('xMax')?.value);
+  const yminDisp = parseFloat(document.getElementById('yMin')?.value);
+  const ymaxDisp = parseFloat(document.getElementById('yMax')?.value);
+  const y2minDisp = parseFloat(document.getElementById('y2Min')?.value);
+  const y2maxDisp = parseFloat(document.getElementById('y2Max')?.value);
   const xTickScale = parseFloat(document.getElementById('xScale')?.value) || 1;
   const yTickScale = parseFloat(document.getElementById('yScale')?.value) || 1;
+  const y2TickScale = parseFloat(document.getElementById('y2Scale')?.value) || 1;
 
-  // 눈금 배율은 라벨에만 적용하고, 범위(min/max)는 데이터 단위를 그대로 사용
-  const xScale = { type: 'linear', title: { display: true, text: xl }, ticks: { callback: (v)=> (v * xTickScale).toFixed(3) } };
+  const xScale = { type: 'linear', title: { display: !document.getElementById('keepX')?.checked, text: xl }, ticks: { callback: (v)=> (v * xTickScale).toFixed(0) } };
   if (Number.isFinite(xminDisp)) xScale.min = xminDisp;
   if (Number.isFinite(xmaxDisp)) xScale.max = xmaxDisp;
-  else if (!Number.isFinite(xmaxDisp) && Array.isArray(freq) && freq.length) xScale.max = freq[freq.length-1];
 
-  const yScale = { title: { display: true, text: yl }, ticks: { callback: (v)=> (v * yTickScale).toFixed(3) } };
+  const keepY1 = !!document.getElementById('keepY1')?.checked;
+  const keepY2 = !!document.getElementById('keepY2')?.checked;
+
+  const yScale = { title: { display: !keepY1, text: yl }, ticks: { callback: (v)=> (v * yTickScale).toFixed(0) } };
   if (Number.isFinite(yminDisp)) yScale.min = yminDisp;
   if (Number.isFinite(ymaxDisp)) yScale.max = ymaxDisp;
 
-  ch.options.scales = { x: xScale, y: yScale };
+  const y2Scale = { position: 'right', grid: { drawOnChartArea: false }, title: { display: !keepY2, text: y2l }, ticks: { callback: (v)=> (v * y2TickScale).toFixed(0) } };
+  if (Number.isFinite(y2minDisp)) y2Scale.min = y2minDisp;
+  if (Number.isFinite(y2maxDisp)) y2Scale.max = y2maxDisp;
+  if (!keepY2 && opts.y2Min !== undefined) y2Scale.min = opts.y2Min;
+  if (!keepY2 && opts.y2Max !== undefined) y2Scale.max = opts.y2Max;
+
+  ch.options.scales = { x: xScale, y: yScale, y2: y2Scale };
 }
 
 function refreshDatasetSelect() {
-  const sel = document.getElementById('datasetSelect');
-  if (!sel) return;
-  sel.innerHTML = '';
-  datasetList.forEach((d, i) => {
-    const opt = document.createElement('option');
-    opt.value = d.id; opt.textContent = `${d.id}: ${d.caption}`; sel.appendChild(opt);
-  });
-  if (sel.options.length) sel.selectedIndex = sel.options.length - 1;
+  const sel1 = document.getElementById('datasetSelect');
+  const sel2 = document.getElementById('datasetSelect2');
+  if (!sel1 && !sel2) return;
+  const prev1 = sel1 ? sel1.value : null;
+  const prev2 = sel2 ? sel2.value : null;
+  const fill = (sel) => {
+    if (!sel) return;
+    sel.innerHTML = '';
+    datasetList.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.id; opt.textContent = `${d.id}: ${d.caption}`; sel.appendChild(opt);
+    });
+  };
+  fill(sel1); fill(sel2);
+  // restore selection if still present
+  const hasId = (id) => !!datasetList.find(d => d.id === id);
+  if (sel1) {
+    if (prev1 && hasId(prev1)) sel1.value = prev1;
+    else if (sel1.options.length) sel1.selectedIndex = sel1.options.length - 1; // default latest
+  }
+  if (sel2) {
+    if (prev2 && hasId(prev2)) sel2.value = prev2;
+    else if (sel2.options.length >= 2) sel2.selectedIndex = sel2.options.length - 2; // default previous
+  }
 }
 
 function rebuildDatasetsFromTerminal() {
@@ -506,73 +361,147 @@ function rebuildDatasetsFromTerminal() {
 }
 
 function plotFromDataset() {
-  const sel = document.getElementById('datasetSelect');
-  if (!sel || !sel.value) { alert('데이터셋을 선택하세요.'); return; }
-  const ds = datasetList.find(d => d.id === sel.value);
-  if (!ds) { alert('선택한 데이터셋을 찾을 수 없습니다.'); return; }
-  plotMagnitudeArray(ds.values);
-}
-
-function applyAxes(ch, freq, values) {
-  const xl = (document.getElementById('xLabel')?.value || 'Index');
-  const yl = (document.getElementById('yLabel')?.value || 'Amplitude');
-  const xminDisp = parseFloat(document.getElementById('xMin')?.value);
-  const xmaxDisp = parseFloat(document.getElementById('xMax')?.value);
-  const yminDisp = parseFloat(document.getElementById('yMin')?.value);
-  const ymaxDisp = parseFloat(document.getElementById('yMax')?.value);
-  const xTickScale = parseFloat(document.getElementById('xScale')?.value) || 1;
-  const yTickScale = parseFloat(document.getElementById('yScale')?.value) || 1;
-  const xScale = {
-    type: 'linear',
-    title: { display: true, text: xl },
-    ticks: { callback: (v)=> (v * xTickScale).toFixed(0) }
-  };
-  if (Number.isFinite(xminDisp)) xScale.min = xminDisp;
-  if (Number.isFinite(xmaxDisp)) xScale.max = xmaxDisp;
-  const yScale = {
-    title: { display: true, text: yl },
-    ticks: { callback: (v)=> (v * yTickScale).toFixed(0) }
-  };
-  if (Number.isFinite(yminDisp)) yScale.min = yminDisp;
-  if (Number.isFinite(ymaxDisp)) yScale.max = ymaxDisp;
-  ch.options.scales = { x: xScale, y: yScale };
+  const sel1 = document.getElementById('datasetSelect');
+  const sel2 = document.getElementById('datasetSelect2');
+  const id1 = sel1 && sel1.value;
+  const id2 = sel2 && sel2.value;
+  if (!id1 && !id2) { alert('데이터셋을 선택하세요.'); return; }
+  const ds1 = id1 ? datasetList.find(d => d.id === id1) : null;
+  const ds2 = id2 ? datasetList.find(d => d.id === id2) : null;
+  if (!ds1 && !ds2) { alert('선택한 데이터셋을 찾을 수 없습니다.'); return; }
+  const isTime = (d)=> !!d && /^TIME_/i.test(String(d.caption||''));
+  const full = isTime(ds1) || isTime(ds2);
+  try { console.debug('[webterm] plotFromDataset', { id1, id2, fullForTime: full, len1: ds1?.values?.length, len2: ds2?.values?.length }); } catch(_) {}
+  plotMagnitudeDual(ds1 ? ds1.values : null, ds2 ? ds2.values : null, { fullForTime: full });
+  try { autoScaleAxes(); } catch(_) {}
 }
 
 function autoScaleAxes() {
   if (!chart) return;
   try {
-    const ds = chart.data.datasets[0]?.data || [];
-    if (!ds.length) return;
-    const ys = ds.map(p => p.y).filter(Number.isFinite);
-    const xs = ds.map(p => p.x).filter(Number.isFinite);
-    if (!ys.length || !xs.length) return;
-    const ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const d0 = chart.data.datasets[0] || null;
+    const d1 = chart.data.datasets[1] || null;
+    const keepX  = !!document.getElementById('keepX')?.checked;
+    const keepY1 = !!document.getElementById('keepY1')?.checked;
+    const keepY2 = !!document.getElementById('keepY2')?.checked;
+
+    const xs = (d0?.data || d1?.data || []).map(p => p.x).filter(Number.isFinite);
+    if (!xs.length) return;
     const xmin = Math.min(...xs), xmax = Math.max(...xs);
-    const padY = (ymax - ymin) * 0.05;
-    // 입력칸은 데이터 단위 값으로 채움
-    document.getElementById('yMin').value = (ymin - padY).toFixed(3);
-    document.getElementById('yMax').value = (ymax + padY).toFixed(3);
-    document.getElementById('xMin').value = xmin.toFixed(3);
-    document.getElementById('xMax').value = xmax.toFixed(3);
-    applyAxes(chart, xs, ys);
+
+    const getYBounds = (ds) => {
+      if (!ds) return [undefined, undefined];
+      const ys = (ds.data||[]).map(p=>p.y).filter(Number.isFinite);
+      if (!ys.length) return [undefined, undefined];
+      const min = Math.min(...ys), max = Math.max(...ys);
+      const pad = (max - min) * 0.05; // 동일 퍼센티지 적용
+      return [min - pad, max + pad];
+    };
+    const [ymin1, ymax1] = getYBounds(d0);
+    const [ymin2, ymax2] = getYBounds(d1);
+
+    // 업데이트는 유지 체크가 해제된 축만 수행
+    if (!keepY1) {
+      if (ymin1!==undefined) document.getElementById('yMin').value = ymin1.toFixed(3);
+      if (ymax1!==undefined) document.getElementById('yMax').value = ymax1.toFixed(3);
+    }
+    if (!keepY2) {
+      if (ymin2!==undefined) document.getElementById('y2Min').value = ymin2.toFixed(3);
+      if (ymax2!==undefined) document.getElementById('y2Max').value = ymax2.toFixed(3);
+    }
+    if (!keepX) {
+      document.getElementById('xMin').value = xmin.toFixed(3);
+      document.getElementById('xMax').value = xmax.toFixed(3);
+    }
+
+    const opts = {};
+    if (!keepY2) { opts.y2Min = ymin2; opts.y2Max = ymax2; }
+    applyAxes(chart, xs, null, opts);
     chart.update();
   } catch (e) { try { console.error('[autoScale] error', e); } catch(_) {} }
 }
 
 function plotMagnitudeArray(values) {
-  const N = values.length;
-  const freq = makeFrequencyAxis(N);
-  const half = Math.floor(N/2);
-  const magHalf = values.slice(0, half);
+  // If selected dataset is TIME_*, don't halve the array
+  const sel = document.getElementById('datasetSelect');
+  const selectedId = sel && sel.value;
+  const isTime = (()=>{
+    if (!selectedId) return false;
+    const ds = datasetList.find(d=>d.id===selectedId);
+    const cap = ds && ds.caption ? String(ds.caption) : '';
+    return /^TIME_/i.test(cap);
+  })();
+  plotMagnitudeDual(values, null, { fullForTime: isTime });
+}
+
+function notifyChartUpdated() {
+  try { window.dispatchEvent(new CustomEvent('webterm:chart-updated')); } catch(_) {}
+}
+
+function plotMagnitudeDual(values1, values2, opts = {}) {
   const ctx = document.getElementById('chart').getContext('2d');
   const ch = ensureChart(ctx);
+  const makeMaybeHalf = (arr) => {
+    if (!arr) return [];
+    if (opts && opts.fullForTime) return arr.slice();
+    const N = arr.length;
+    const half = Math.floor(N/2);
+    return arr.slice(0, half);
+  };
+  const v1 = makeMaybeHalf(values1);
+  const v2 = makeMaybeHalf(values2);
+  const N = (opts && opts.fullForTime) ? Math.max(values1?.length||0, values2?.length||0) : Math.max(v1.length, v2.length) * 2; // 추정 원본 길이
+  const freq = (opts && opts.fullForTime)
+    ? Array.from({ length: v1.length }, (_, i) => i)
+    : makeFrequencyAxis(N);
+  try { console.debug('[webterm] plotMagnitudeDual', { fullForTime: !!(opts&&opts.fullForTime), v1: v1.length, v2: v2.length, N }); } catch(_) {}
+
   ch.data.labels = [];
-  const yScale = parseFloat(document.getElementById('yScale')?.value) || 1;
-  ch.data.datasets = [{ label: '', data: magHalf.map((y,i)=>({x:freq[i],y:y})), parsing:false, borderColor:'#2ca02c', pointRadius:0, tension:0, spanGaps:true, showLine:true }];
-  // 범례 제거
-  ch.options.plugins.legend.display = false;
-  applyAxes(ch, freq, magHalf);
+  const ds = [];
+  if (v1.length) {
+    ds.push({ label: 'Ch1', yAxisID: 'y', data: v1.map((y,i)=>({x:freq[i],y:y})), parsing:false, borderColor:'#2ca02c', pointRadius:0, tension:0, spanGaps:true, showLine:true });
+  }
+  if (v2.length) {
+    ds.push({ label: 'Ch2', yAxisID: 'y2', data: v2.map((y,i)=>({x:freq[i],y:y})), parsing:false, borderColor:'#ff7f0e', pointRadius:0, tension:0, spanGaps:true, showLine:true });
+  }
+  ch.data.datasets = ds;
+  ch.options.plugins.legend.display = true;
+
+  // 이벤트로 분석 갱신 통지
+  notifyChartUpdated();
+
+  // autoscale per axis
+  const ys1 = v1.filter(Number.isFinite);
+  const ys2 = v2.filter(Number.isFinite);
+  const xs = (ds[0]?.data || []).map(p=>p.x);
+  const y1min = ys1.length ? Math.min(...ys1) : undefined;
+  const y1max = ys1.length ? Math.max(...ys1) : undefined;
+  const y2min = ys2.length ? Math.min(...ys2) : undefined;
+  const y2max = ys2.length ? Math.max(...ys2) : undefined;
+  const padPct = 0.05; // 동일 퍼센티지 사용
+  const pad = (min,max)=>{ const d=(max-min)*padPct; return [min-d, max+d]; };
+  const [yy1min, yy1max] = (y1min!==undefined&&y1max!==undefined) ? pad(y1min,y1max) : [undefined, undefined];
+  const [yy2min, yy2max] = (y2min!==undefined&&y2max!==undefined) ? pad(y2min,y2max) : [undefined, undefined];
+
+  const keepY1 = !!document.getElementById('keepY1')?.checked;
+  const keepY2 = !!document.getElementById('keepY2')?.checked;
+
+  const axesOpts = {};
+  if (!keepY2) { axesOpts.y2Min = yy2min; axesOpts.y2Max = yy2max; }
+  applyAxes(ch, xs, v1, axesOpts);
+
+  // 입력칸 업데이트는 유지가 꺼져 있을 때만
+  if (!keepY1) {
+    if (yy1min!==undefined) document.getElementById('yMin').value = yy1min.toFixed(3);
+    if (yy1max!==undefined) document.getElementById('yMax').value = yy1max.toFixed(3);
+  }
+  if (!keepY2) {
+    if (yy2min!==undefined) document.getElementById('y2Min').value = yy2min.toFixed(3);
+    if (yy2max!==undefined) document.getElementById('y2Max').value = yy2max.toFixed(3);
+  }
+
   ch.update();
+  notifyChartUpdated();
 }
 
 function initPlaceholderPlot() {
@@ -597,11 +526,12 @@ function ensureChart(ctx) {
       parsing: false,
       spanGaps: true,
       interaction: { mode: 'nearest', intersect: false },
-      plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { title(items){ try { const xs = parseFloat(document.getElementById('xScale')?.value)||1; const x = (items && items.length && items[0].parsed && Number.isFinite(items[0].parsed.x)) ? items[0].parsed.x : undefined; return (x!==undefined) ? (x*xs).toFixed(3) : ''; } catch(_) { return ''; } }, label(ctx){ try { const ys = parseFloat(document.getElementById('yScale')?.value)||1; const y = (ctx && ctx.parsed && Number.isFinite(ctx.parsed.y)) ? ctx.parsed.y : undefined; return (y!==undefined) ? (y*ys).toFixed(3) : ''; } catch(_) { return ''; } } } }, },
+      plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { title(items){ try { const xs = parseFloat(document.getElementById('xScale')?.value)||1; const x = (items && items.length && items[0].parsed && Number.isFinite(items[0].parsed.x)) ? items[0].parsed.x : undefined; return (x!==undefined) ? (x*xs).toFixed(3) : ''; } catch(_) { return ''; } }, label(ctx){ try { const axisId = ctx.dataset.yAxisID || 'y'; const y1s = parseFloat(document.getElementById('yScale')?.value)||1; const y2s = parseFloat(document.getElementById('y2Scale')?.value)||1; const scale = axisId === 'y2' ? y2s : y1s; const y = (ctx && ctx.parsed && Number.isFinite(ctx.parsed.y)) ? ctx.parsed.y : undefined; return (y!==undefined) ? (y*scale).toFixed(3) : ''; } catch(_) { return ''; } } } }, },
       maintainAspectRatio: false,
       scales: {
         x: { type: 'linear', title: { display: true, text: 'Index' } },
-        y: { title: { display: true, text: 'Amplitude' } }
+        y: { title: { display: true, text: 'Amplitude' } },
+        y2: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Amplitude 2' } }
       }
     }
   });
@@ -724,6 +654,10 @@ function saveVizToFile() {
   pushKV('yMin', document.getElementById('yMin')?.value || '');
   pushKV('yMax', document.getElementById('yMax')?.value || '');
   pushKV('yScale', document.getElementById('yScale')?.value || '1');
+  pushKV('y2Label', document.getElementById('y2Label')?.value || '');
+  pushKV('y2Min', document.getElementById('y2Min')?.value || '');
+  pushKV('y2Max', document.getElementById('y2Max')?.value || '');
+  pushKV('y2Scale', document.getElementById('y2Scale')?.value || '1');
   const blob = new Blob([lines.join('\n') + '\n'], {type:'text/plain'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -745,6 +679,7 @@ function loadVizFromFile() {
     const setIf = (id, key) => { if (map[key] !== undefined) document.getElementById(id).value = map[key]; };
     setIf('xLabel','xLabel'); setIf('xMin','xMin'); setIf('xMax','xMax'); setIf('xScale','xScale');
     setIf('yLabel','yLabel'); setIf('yMin','yMin'); setIf('yMax','yMax'); setIf('yScale','yScale');
+    setIf('y2Label','y2Label'); setIf('y2Min','y2Min'); setIf('y2Max','y2Max'); setIf('y2Scale','y2Scale');
     if (chart) { plotFromDataset(); }
   };
   input.click();
@@ -770,7 +705,7 @@ function downloadHeaders() {
 
 1) 파일 복사
 - WebTerminal.h, WebTerminal.c를 Vitis 프로젝트의 src 폴더에 추가합니다.
-- main.cpp에서 \"WebTerminal.h\"를 include 하세요.
+- main.cpp에서 "WebTerminal.h"를 include 하세요.
 
 2) 빌드 설정
 - 추가 설정은 필요 없습니다. UART 출력(xil_printf)이 활성화되어 있어야 합니다.
@@ -778,7 +713,7 @@ function downloadHeaders() {
 3) 사용 방법
 - 배열에 데이터(예: FFT magnitude)를 채운 뒤 WebTerm_PrintDataset을 호출합니다.
 
-  #include \"WebTerminal.h\"\n  int32_t mag[1024];\n  // ... mag 채우기 ...\n  WebTerm_PrintDataset(\"ADC1/Q2 FFT\", mag, 1024);
+  #include "WebTerminal.h"\n  int32_t mag[1024];\n  // ... mag 채우기 ...\n  WebTerm_PrintDataset("ADC1/Q2 FFT", mag, 1024);
 
 - 출력 포맷(웹과 연동):
   [Plot_XXXX: Caption]\r\n
@@ -825,18 +760,57 @@ window.addEventListener('DOMContentLoaded', () => {
   const reapply = ()=>{ if(chart){ applyAxes(chart, chart.data?.datasets?.[0]?.data?.map(p=>p.x) || [], null); chart.update(); } };
   document.getElementById('xLabel').addEventListener('change', reapply);
   document.getElementById('yLabel').addEventListener('change', reapply);
+  document.getElementById('y2Label').addEventListener('change', reapply);
   document.getElementById('xMin').addEventListener('change', reapply);
   document.getElementById('xMax').addEventListener('change', reapply);
   document.getElementById('yMin').addEventListener('change', reapply);
   document.getElementById('yMax').addEventListener('change', reapply);
+  document.getElementById('y2Min').addEventListener('change', reapply);
+  document.getElementById('y2Max').addEventListener('change', reapply);
   const onScaleInput = ()=>{ reapply(); autoScaleAxes(); };
   document.getElementById('xScale').addEventListener('change', onScaleInput);
   document.getElementById('yScale').addEventListener('change', onScaleInput);
+  document.getElementById('y2Scale').addEventListener('change', onScaleInput);
   document.getElementById('xScale').addEventListener('input', onScaleInput);
   document.getElementById('yScale').addEventListener('input', onScaleInput);
+  document.getElementById('y2Scale').addEventListener('input', onScaleInput);
   document.getElementById('btnSaveViz').addEventListener('click', saveVizToFile);
   document.getElementById('btnLoadViz').addEventListener('click', loadVizFromFile);
+  const analyzeNow = ()=>{
+    try {
+      const d0 = chart?.data?.datasets?.[0]?.data || [];
+      const d1 = chart?.data?.datasets?.[1]?.data || [];
+      const getStats = (arr)=>{
+        const ys = arr.map(p=>p.y).filter(Number.isFinite);
+        if (!ys.length) return {min: NaN, max: NaN, offset: NaN};
+        const min = Math.min(...ys); const max = Math.max(...ys);
+        const offset = (min + max) / 2;
+        return {min, max, offset};
+      };
+      const s1 = getStats(d0), s2 = getStats(d1);
+      const set = (id,v)=>{ const el=document.getElementById(id); if (el) el.value = Number.isFinite(v) ? v.toFixed(3) : ''; };
+      set('anCh1Max', s1.max); set('anCh1Min', s1.min); set('anCh1Offset', s1.offset);
+      set('anCh2Max', s2.max); set('anCh2Min', s2.min); set('anCh2Offset', s2.offset);
+    } catch (e) { try { console.error('[analyze] error', e); } catch(_) {} }
+  };
+  const ba = document.getElementById('btnAnalyze'); if (ba) ba.addEventListener('click', analyzeNow);
   document.getElementById('downloadHeaders').addEventListener('click', (e)=>{ e.preventDefault(); downloadHeaders(); });
+
+  // 섹션 접기/펼치기
+  const bindToggle = (btnId, secId) => {
+    const b = document.getElementById(btnId);
+    const s = document.getElementById(secId);
+    if (!b || !s) return;
+    b.addEventListener('click', () => {
+      s.classList.toggle('collapsed');
+      b.textContent = s.classList.contains('collapsed') ? '펼치기' : '접기';
+    });
+  };
+  bindToggle('tg-connect','sec-connect');
+  bindToggle('tg-terminal','sec-terminal');
+  bindToggle('tg-plot','sec-plot');
+  bindToggle('tg-analysis','sec-analysis');
+
   // 초기 placeholder 그래프 그리기
   initPlaceholderPlot();
   // 초기 축 범위/라벨 설정 적용
@@ -852,6 +826,3 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
-</script>
-</body>
-</html>
