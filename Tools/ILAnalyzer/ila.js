@@ -549,7 +549,12 @@ function updateWaveform() {
                 color: 'rgba(255, 255, 255, 0.1)'
               },
               ticks: {
-                color: '#e8e8e8'
+                color: '#e8e8e8',
+                padding: 8
+              },
+              afterFit: function(scale) {
+                // Y축 레이블 너비를 고정하기 위한 최소 너비 설정
+                // 모든 차트에서 동일한 공간을 사용하도록 보장
               }
             }
           },
@@ -751,6 +756,83 @@ function updateWaveform() {
     // change 이벤트 트리거하여 설정 업데이트
     radixSelect.dispatchEvent(new Event('change'));
   }
+  
+  // 모든 차트 업데이트 후 Y축 레이블 공간 정렬
+  setTimeout(() => {
+    alignYAxisLabels();
+  }, 0);
+}
+
+// Y축 레이블 공간을 일정하게 정렬
+function alignYAxisLabels() {
+  if (charts.size === 0) return;
+  
+  // 모든 차트의 Y축 레이블 최대 너비 계산
+  let maxLabelWidth = 0;
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+  
+  // 먼저 모든 차트가 완전히 렌더링될 때까지 기다림
+  charts.forEach((chart) => {
+    if (!chart || !chart.scales || !chart.scales.y) return;
+    
+    const yScale = chart.scales.y;
+    
+    // Chart.js의 내부 폰트 설정 가져오기
+    const ctx = chart.ctx;
+    const fontString = ctx.font || '12px Arial';
+    tempCtx.font = fontString;
+    
+    // 모든 Y축 눈금 레이블의 너비 측정
+    if (yScale.ticks && Array.isArray(yScale.ticks)) {
+      yScale.ticks.forEach((tick) => {
+        const label = tick.label || '';
+        if (label) {
+          const width = tempCtx.measureText(String(label)).width;
+          maxLabelWidth = Math.max(maxLabelWidth, width);
+        }
+      });
+    }
+    
+    // Y축 제목이 있으면 포함
+    if (yScale.options && yScale.options.title && yScale.options.title.display) {
+      const titleText = yScale.options.title.text || '';
+      if (titleText) {
+        const titleWidth = tempCtx.measureText(String(titleText)).width;
+        maxLabelWidth = Math.max(maxLabelWidth, titleWidth * 0.3); // 제목은 회전되어 있으므로 일부만 고려
+      }
+    }
+  });
+  
+  // 최소 너비 보장 (최소 70px, 최대 너비 + 여유 공간 30px)
+  const fixedPadding = Math.max(70, maxLabelWidth + 30);
+  
+  // 모든 차트의 Y축에 동일한 afterFit 콜백 설정
+  charts.forEach((chart) => {
+    if (!chart || !chart.options || !chart.options.scales || !chart.options.scales.y) return;
+    
+    // afterFit 콜백 설정 (차트 업데이트 시마다 실행됨)
+    const originalAfterFit = chart.options.scales.y.afterFit;
+    
+    chart.options.scales.y.afterFit = function(scale) {
+      // 원본 afterFit 실행 (있는 경우)
+      if (originalAfterFit && typeof originalAfterFit === 'function') {
+        originalAfterFit.call(this, scale);
+      }
+      
+      // Y축 너비를 고정 패딩으로 확장
+      const currentWidth = scale.width || 0;
+      if (currentWidth < fixedPadding) {
+        const diff = fixedPadding - currentWidth;
+        scale.width = fixedPadding;
+        // left 위치 조정 (차트 영역 유지)
+        scale.left = (scale.left || 0) - diff;
+      }
+    };
+    
+    // 차트 업데이트하여 변경사항 적용
+    chart.update('none');
+  });
 }
 
 function updateWaveformSignalValue(span, signal) {
