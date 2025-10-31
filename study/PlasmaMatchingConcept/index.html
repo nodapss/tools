@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RC‒RL 병렬 공진 회로 주파수 응답</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; color: #111; background: #fafafa; }
+        header { padding: 20px 24px; }
+        h1 { font-size: 20px; margin: 0 0 8px 0; }
+        p.sub { margin: 0; color: #555; font-size: 13px; }
+        #chart-wrap { width: min(1600px, 96vw); height: 520px; margin: 8px auto 0 auto; background: #fff; border: 1px solid #e9e9e9; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); padding: 16px 16px 8px 16px; display: grid; grid-template-columns: 2.7fr 5.3fr; gap: 12px; align-items: stretch; }
+        #controls { width: min(1600px, 96vw); margin: 14px auto 30px auto; background: #fff; border: 1px solid #e9e9e9; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); padding: 16px; }
+        .btn { appearance: none; border: 1px solid #c7cfe1; background: #f6f8ff; color: #3047d3; border-radius: 8px; padding: 6px 12px; font-weight: 600; cursor: pointer; }
+        .btn:hover { background: #eef2ff; }
+        .row { display: grid; grid-template-columns: 200px 1fr 160px; gap: 14px; align-items: center; margin: 8px 0; }
+        input[type="range"] { width: 100%; }
+        .kv { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 10px; margin-top: 8px; font-size: 13px; }
+        .kv div { padding: 6px 10px; background: #f5f7fb; border: 1px solid #edf0f6; border-radius: 8px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #3047d3; font-weight: 600; font-size: 12px; }
+        .note { color: #666; font-size: 12px; }
+        .side-image { width: 100%; height: 100%; object-fit: contain; border: 1px solid #e9e9e9; border-right: 3px solid #d0d7e2; border-radius: 8px; background: #fff; }
+        #chart-wrap > * { min-width: 0; min-height: 0; }
+        #freqChart { max-width: 100% !important; width: 100% !important; height: auto !important; display: block; border-left: 3px solid #d0d7e2; }
+        .hidden { display: none; }
+        .left-pane { position: relative; }
+        .mini { position: absolute; width: 180px; background: rgba(255,255,255,0.7); padding: 6px; border: 1px solid #d6dae6; border-radius: 8px; backdrop-filter: blur(2px); }
+        .mini label { display: block; font-size: 12px; margin-bottom: 4px; color: #223; }
+        .mini input[type="range"] { width: 100%; height: 8px; }
+        .mini-plasma { top: 6%; right: 4%; }
+        .mini-matcher { top: 18%; left: 2%; }
+        .mini-freq { bottom: 12%; left: 6%; width: 220px; }
+        /* Hotspot and capacitor table */
+        .hotspot-cap { position: absolute; top: 36%; left: 26%; width: 34%; height: 40%; background: rgba(0,0,0,0); border: 0; cursor: pointer; }
+        .hotspot-cap:hover { outline: 2px dashed rgba(48,71,211,0.35); }
+        #capTable { display: none; width: 100%; height: 100%; object-fit: contain; background: #fff; border-left: 3px solid #d0d7e2; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>RC‒RL 병렬 공진 회로 주파수 응답 (|Z|)</h1>
+        <p class="sub">x축: 주파수 5–20 MHz, y축: 임피던스 절대값 (Ω). 13.56 MHz에서 50 Ω, Im(Z)=0로 기본 설정. 저항은 Rc=Rl(동일)로 고정, 조정은 C만.</p>
+    </header>
+
+    <section id="chart-wrap">
+        <div id="leftPane" class="left-pane">
+            <img id="leftImage" src="Default.png" alt="Default" class="side-image" />
+            <button id="hotspotCap" class="hotspot-cap" title="Show Capacitor Table"></button>
+            <div class="mini mini-plasma">
+                <label>Plasma Change</label>
+                <input id="plasmaMini" type="range" min="0.80" max="1.20" step="0.001" />
+            </div>
+            <div class="mini mini-matcher">
+                <label>Matcher Circuit Change</label>
+                <input id="matcherMini" type="range" min="0.80" max="1.20" step="0.001" />
+            </div>
+            <div class="mini mini-freq">
+                <label>Frequency Change (MHz)</label>
+                <input id="freqMini" type="range" min="12.00" max="15.00" step="0.01" />
+            </div>
+        </div>
+        <canvas id="freqChart"></canvas>
+        <img id="capTable" alt="Capacitor Table" src="Capacitor Table.png" />
+    </section>
+
+    <section id="controls">
+        <div class="badge">조정</div>
+        <button id="resetBtn" class="btn">초기화</button>
+        <div class="row hidden">
+            <label for="freq">Frequency Change (MHz):</label>
+            <input id="freq" type="range" min="12.00" max="15.00" step="0.01" value="13.56" />
+            <div><b><span id="freqVal">13.56</span> MHz</b></div>
+        </div>
+        <div class="row hidden">
+            <label for="plasma">Plasma Change:</label>
+            <input id="plasma" type="range" min="0.80" max="1.20" step="0.001" value="1.000" />
+            <div><b><span id="plasmaVal">100.0</span>%</b></div>
+        </div>
+        <div class="row hidden">
+            <label for="matcher">Matcher Circuit Change:</label>
+            <input id="matcher" type="range" min="0.80" max="1.20" step="0.001" value="1.000" />
+            <div><b><span id="matcherVal">100.0</span>%</b></div>
+        </div>
+        <div class="kv">
+            <div>동일 저항 Rc=Rl: <b><span id="Rval">0.5</span> Ω</b></div>
+            <div>해결된 L: <b><span id="Lval">0.000</span> µH</b></div>
+            <div>기준 C: <b><span id="C0val">0.00</span> pF</b> @ 13.56 MHz</div>
+            <div>적용 C: <b><span id="Cval">0.00</span> pF</b></div>
+        </div>
+        <p class="note" style="margin-top:8px">두 슬라이더 모두 오른쪽으로 갈수록 C가 증가. 총합 스케일은 ±20%로 클램프됩니다.</p>
+    </section>
+
+    <script>
+        const annotation = window['chartjs-plugin-annotation'];
+        Chart.register(annotation);
+
+        function setLeftImage(file){
+            const img = document.getElementById('leftImage');
+            if (!img) return;
+            const sep = file.includes('?') ? '&' : '?';
+            img.src = file + sep + 'ts=' + Date.now();
+        }
+        (function(){ setLeftImage('Default.png'); })();
+
+        const fMinMHz = 5.0, fMaxMHz = 20.0, f0MHz = 13.56; let fSelMHz = f0MHz; const w0 = 2*Math.PI*f0MHz*1e6;
+        const R = 0.5; document.getElementById('Rval').textContent = R.toFixed(1);
+
+        function c(re, im){return {re,im}}; function cAdd(a,b){return c(a.re+b.re,a.im+b.im)}; function cMul(a,b){return c(a.re*b.re-a.im*b.im,a.re*b.im+a.im*b.re)}; function cDiv(a,b){const d=b.re*b.re+b.im*b.im;return c((a.re*b.re+a.im*b.im)/d,(a.im*b.re-a.re*b.im)/d)}; function cAbs(a){return Math.hypot(a.re,a.im)}
+        function Zp(f_Hz,L,C){const w=2*Math.PI*f_Hz;const Zc=c(R,-1/(w*C));const Zl=c(R,w*L);return cDiv(cMul(Zc,Zl),cAdd(Zc,Zl))}
+
+        function solveLC(){const LC0=1/(w0*w0);const Lmin=0.02e-6,Lmax=2e-6,kMin=0.5,kMax=2.0;let best={L:0,C:0,cost:1/0};function g(L,C){const Z=Zp(f0MHz*1e6,L,C);const a=Z.re-50,b=Z.im;return a*a+b*b}const NL=60,NK=60;for(let i=0;i<NL;i++){const t=i/(NL-1),L=Math.exp(Math.log(Lmin)*(1-t)+Math.log(Lmax)*t),C0=LC0/L;for(let j=0;j<NK;j++){const u=j/(NK-1),k=kMin*(1-u)+kMax*u,C=C0*k,v=g(L,C);if(v<best.cost)best={L,C,cost:v}}}for(let p=0;p<2;p++){const Lc=best.L,Cc=best.C,Llo=Lc*0.6,Lhi=Lc*1.4,Clo=Cc*0.6,Chi=Cc*1.4;for(let i=0;i<50;i++){const L=Math.exp(Math.log(Llo)+(Math.log(Lhi)-Math.log(Llo))*(i/49));for(let j=0;j<50;j++){const C=Math.exp(Math.log(Clo)+(Math.log(Chi)-Math.log(Clo))*(j/49)),v=g(L,C);if(v<best.cost)best={L,C,cost:v}}}}return best}
+
+        const solved=solveLC(); let L_uH=solved.L*1e6; let C0_pF=1664.47; document.getElementById('Lval').textContent=L_uH.toFixed(3); document.getElementById('C0val').textContent=C0_pF.toFixed(2);
+
+        const elFreq=document.getElementById('freq'); const elFreqVal=document.getElementById('freqVal');
+        const elPlasma=document.getElementById('plasma'), elMatcher=document.getElementById('matcher'); const elPlasmaVal=document.getElementById('plasmaVal'), elMatcherVal=document.getElementById('matcherVal'); const elCval=document.getElementById('Cval');
+        function netScale(){ const p=parseFloat(elPlasma.value); const m=parseFloat(elMatcher.value); let s = p * m; s = Math.max(0.80, Math.min(1.20, s)); return s; }
+
+        function Zabs(fMHz, C_pF, L_uH){ const w=2*Math.PI*fMHz*1e6; const L=L_uH*1e-6; const C=C_pF*1e-12; const Zc=c(R,-1/(w*C)); const Zl=c(R,w*L); return cAbs(cDiv(cMul(Zc,Zl),cAdd(Zc,Zl))); }
+        function gen(C_pF){ const xs=[], ys=[]; for(let f=fMinMHz; f<=fMaxMHz+1e-9; f+=0.05){ xs.push(Number(f.toFixed(3))); ys.push(Zabs(f, C_pF, L_uH)); } return {xs,ys}; }
+
+        const ctx=document.getElementById('freqChart');
+        const capTableImg=document.getElementById('capTable');
+        const chart=new Chart(ctx,{ type:'line', data:{ labels:[], datasets:[{ label:'임피던스 |Z| (Ω)', data:[], parsing:false, pointRadius:0, borderWidth:2, borderColor:'#1e88e5', fill:false, tension:0.1 }] }, options:{ responsive:true, maintainAspectRatio:true, aspectRatio:2.2, scales:{ x:{ type:'linear', title:{display:true,text:'주파수 (MHz)'}, min:fMinMHz, max:fMaxMHz, ticks:{ callback:(v)=>v.toFixed?v.toFixed(0):v } }, y:{ type:'linear', title:{display:true,text:'임피던스 |Z| (Ω)'}, min:0, max:65 } }, plugins:{ legend:{display:false}, tooltip:{mode:'index',intersect:false}, annotation:{ annotations:{ vLine:{ type:'line', xMin:fSelMHz, xMax:fSelMHz, borderColor:'red', borderWidth:2, borderDash:[6,6] }, hLine:{ type:'line', yMin:50, yMax:50, borderColor:'red', borderWidth:2, borderDash:[6,6] }, crossLabelTarget:{ type:'label', xValue:fSelMHz, yValue:50, content:[`Target: 50 + j0 @ ${fSelMHz.toFixed(2)}MHz`], backgroundColor:'rgba(255,255,255,0.9)', borderColor:'red', borderWidth:1, color:'red', xAdjust:-100, yAdjust:-70 }, crossLabelNow:{ type:'label', xValue:fSelMHz, yValue:50, content:['Now: 0 + j0'], backgroundColor:'rgba(255,255,255,0.9)', borderColor:'#111', borderWidth:1, color:'#111', xAdjust:-100, yAdjust:-50 }, targetPoint:{ type:'point', xValue:fSelMHz, yValue:50, backgroundColor:'red', radius:5, borderWidth:0 } } } }, interaction:{ mode:'nearest', intersect:false } }});
+
+        function setCapTableVisible(show){
+            const canvasEl = document.getElementById('freqChart');
+            if(show){ canvasEl.style.display='none'; capTableImg.style.display='block'; }
+            else { capTableImg.style.display='none'; canvasEl.style.display='block'; }
+        }
+        function render(){ const s=netScale(); const C=C0_pF*s; elPlasmaVal.textContent=(parseFloat(elPlasma.value)*100).toFixed(1); elMatcherVal.textContent=(parseFloat(elMatcher.value)*100).toFixed(1); elCval.textContent=C.toFixed(2);
+            const {xs,ys}=gen(C); chart.data.labels=xs; chart.data.datasets[0].data=xs.map((x,i)=>({x,y:ys[i]}));
+            // Update annotations based on selected frequency
+            const ann = chart.options.plugins.annotation.annotations;
+            ann.vLine.xMin = ann.vLine.xMax = fSelMHz;
+            ann.crossLabelTarget.xValue = fSelMHz; ann.crossLabelTarget.content = [`Target: 50 + j0 @ ${fSelMHz.toFixed(2)}MHz`];
+            ann.crossLabelNow.xValue = fSelMHz; ann.targetPoint.xValue = fSelMHz;
+            const Znow = Zp(fSelMHz*1e6, L_uH*1e-6, C*1e-12); const Rnow = Znow.re; const Xnow = Znow.im;
+            ann.crossLabelNow.content = [`Now: ${Rnow.toFixed(2)} + j${Xnow.toFixed(2)}`];
+            chart.update(); }
+
+        render();
+        // main sliders -> actions
+        elPlasma.addEventListener('input', () => { setCapTableVisible(false); setLeftImage('PlasmaChanged.png'); render(); syncMiniFromMain(); });
+        elMatcher.addEventListener('input', () => { setCapTableVisible(false); setLeftImage('MatChanged.png'); render(); syncMiniFromMain(); });
+        elFreq.addEventListener('input', () => { fSelMHz = parseFloat(elFreq.value); elFreqVal.textContent = fSelMHz.toFixed(2); setCapTableVisible(false); setLeftImage('FreqChanged.png'); render(); syncMiniFromMain(); });
+
+        // mini sliders -> drive main
+        const plasmaMini = document.getElementById('plasmaMini');
+        const matcherMini = document.getElementById('matcherMini');
+        const freqMini = document.getElementById('freqMini');
+        function syncMiniFromMain(){ plasmaMini.value = elPlasma.value; matcherMini.value = elMatcher.value; freqMini.value = elFreq.value; }
+        plasmaMini.addEventListener('input', ()=>{ elPlasma.value = plasmaMini.value; setCapTableVisible(false); setLeftImage('PlasmaChanged.png'); render(); });
+        matcherMini.addEventListener('input', ()=>{ elMatcher.value = matcherMini.value; setCapTableVisible(false); setLeftImage('MatChanged.png'); render(); });
+        freqMini.addEventListener('input', ()=>{ elFreq.value = freqMini.value; fSelMHz = parseFloat(freqMini.value); elFreqVal.textContent = fSelMHz.toFixed(2); setCapTableVisible(false); setLeftImage('FreqChanged.png'); render(); });
+        syncMiniFromMain();
+
+        document.getElementById('hotspotCap').addEventListener('click', ()=> setCapTableVisible(true));
+        capTableImg.addEventListener('click', ()=> setCapTableVisible(false));
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            // reset sliders
+            elFreq.value = '13.56'; fSelMHz = 13.56; elFreqVal.textContent = fSelMHz.toFixed(2);
+            elPlasma.value = '1.000'; elPlasmaVal.textContent = '100.0';
+            elMatcher.value = '1.000'; elMatcherVal.textContent = '100.0';
+            setLeftImage('Default.png');
+            setCapTableVisible(false);
+            syncMiniFromMain();
+            render();
+        });
+    </script>
+</body>
+</html>
