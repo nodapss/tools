@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ILA Analyzer</title>
+<script src="../WebTerminal/chart.js"></script>
+<link rel="stylesheet" href="ila.css">
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h2>ILA Analyzer</h2>
+    <p class="small" style="margin:4px 0 0 0;">Vivado ILA 데이터를 분석합니다. CSV 파일을 드래그 앤 드롭하거나 선택하세요.</p>
+  </div>
+
+  <div class="splitter">
+    <!-- 좌측: 파일 입력 및 신호 목록 -->
+    <div class="left-panel">
+      <!-- 드래그 앤 드롭 영역 -->
+      <div class="section" id="sec-file">
+        <h3>파일 입력</h3>
+        <button class="toggle" id="tg-file">접기</button>
+        <div id="dropZone" class="drop-zone">
+          <p>CSV 파일을 여기에 드래그하거나</p>
+          <button id="btnSelectFile" class="primary">파일 선택</button>
+          <input type="file" id="fileInput" accept=".csv" style="display:none;">
+        </div>
+        <div id="fileStatus" class="status" style="margin-top:6px;"></div>
+      </div>
+
+      <div class="gutter"></div>
+
+      <!-- 신호 목록 -->
+      <div class="section" id="sec-signals">
+        <h3>신호 목록</h3>
+        <button class="toggle" id="tg-signals">접기</button>
+        <div class="signal-controls">
+          <button id="btnSelectAll" class="secondary small">전체 선택</button>
+          <button id="btnDeselectAll" class="secondary small">전체 해제</button>
+          <button id="btnNewBus" class="secondary small" disabled>New Bus</button>
+        </div>
+        <div id="signalList" class="signal-list">
+          <p class="small" style="color:#666; margin:8px;">파일을 로드하세요.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="gutter-vertical"></div>
+
+    <!-- 중앙: 웨이브폼 영역 -->
+    <div class="center-panel">
+      <div class="section" id="sec-waveform">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">웨이브폼</h3>
+          <button class="toggle" id="tg-waveform">접기</button>
+        </div>
+        <div class="waveform-controls" style="margin-top:4px;">
+          <button id="btnZoomIn" class="secondary small">확대</button>
+          <button id="btnZoomOut" class="secondary small">축소</button>
+          <button id="btnZoomFit" class="secondary small">선택맞춤</button>
+          <button id="btnResetZoom" class="secondary small">리셋</button>
+          <button id="btnExportCSV" class="secondary small">CSV 출력</button>
+          <label style="margin-left:8px; display:inline-flex; align-items:center; gap:4px; font-size:12px;">
+            <input type="checkbox" id="globalCursorEnabled" checked style="margin:0;">
+            <span>전역 축</span>
+          </label>
+        </div>
+        <div id="waveformContainer" class="waveform-container">
+          <!-- 전역 노란색 축 (Vivado ILA 스타일) -->
+          <div id="globalCursor" class="global-cursor"></div>
+          <!-- 신호별 그래프가 여기에 동적으로 생성됩니다 -->
+          <div class="waveform-placeholder">
+            <p class="small" style="color:#666; text-align:center; padding:40px;">신호를 선택하세요.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gutter-vertical"></div>
+
+    <!-- 우측: 설정 및 데이터 패널 -->
+    <div class="right-panel">
+      <!-- 설정 섹션 -->
+      <div class="section" id="sec-settings">
+        <h3>설정</h3>
+        <button class="toggle" id="tg-settings">접기</button>
+        
+        <div class="settings-group">
+          <h4>표시 옵션</h4>
+          <div class="settings-row">
+            <label><input type="checkbox" id="showGrid" checked> 그리드 표시</label>
+          </div>
+          <div class="settings-row">
+            <label><input type="checkbox" id="showTrigger" checked> 트리거 마커</label>
+          </div>
+          <div class="settings-row">
+            <label><input type="checkbox" id="showShadow"> 웨이브폼 그림자</label>
+          </div>
+        </div>
+
+        <div class="gutter-small"></div>
+
+        <div class="settings-group">
+          <h4>선택된 신호 설정</h4>
+          <div class="settings-row">
+            <label>신호:
+              <select id="selectedSignalRadix" style="min-width:120px;">
+                <option value="">없음</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label>Input Radix:
+              <select id="inputRadixSelect" style="min-width:120px;">
+                <option value="AUTO">자동</option>
+                <option value="UNSIGNED">Unsigned</option>
+                <option value="SIGNED">Signed</option>
+                <option value="HEX">Hex</option>
+                <option value="BINARY">Binary</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label>Output Radix:
+              <select id="outputRadixSelect" style="min-width:120px;">
+                <option value="AUTO">자동</option>
+                <option value="UNSIGNED">Unsigned</option>
+                <option value="SIGNED">Signed</option>
+                <option value="HEX">Hex</option>
+                <option value="BINARY">Binary</option>
+                <option value="FLOAT32">32-bit Float</option>
+                <option value="FLOAT64">64-bit Float</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label>플롯 형태:
+              <select id="plotTypeSelect" style="min-width:120px;">
+                <option value="solid">Solid</option>
+                <option value="dot">Dot</option>
+                <option value="solid-dot">Solid-Dot</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label>선 두께:
+              <input type="range" id="lineWidthSlider" min="0.5" max="5" step="0.5" value="1" style="width:100px;">
+              <span id="lineWidthValue" style="margin-left:8px; font-size:11px; color:#666;">1</span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label>Dot 두께:
+              <input type="range" id="pointRadiusSlider" min="0" max="10" step="0.5" value="1" style="width:100px;">
+              <span id="pointRadiusValue" style="margin-left:8px; font-size:11px; color:#666;">1</span>
+            </label>
+          </div>
+          <div id="signalValue" class="signal-value-display" style="margin-top:8px;">
+            <p class="small">값: -</p>
+          </div>
+        </div>
+
+        <div class="gutter-small"></div>
+
+        <div class="settings-group">
+          <h4>축 설정</h4>
+          <div class="controls-grid">
+            <div class="ctl">
+              <span class="lab">X축 라벨:</span>
+              <input id="xLabel" type="text" value="Sample in Window" style="width:140px;">
+            </div>
+          </div>
+          <div class="controls-grid" style="margin-top:6px;">
+            <div class="ctl">
+              <span class="lab">Xmin:</span>
+              <input id="xMin" type="number" style="width:70px; font-size:11px; padding:2px 3px;">
+            </div>
+            <div class="ctl">
+              <span class="lab">Xmax:</span>
+              <input id="xMax" type="number" style="width:70px; font-size:11px; padding:2px 3px;">
+            </div>
+          </div>
+          <div class="controls-grid" style="margin-top:6px;">
+            <div class="ctl">
+              <span class="lab">Ymin:</span>
+              <input id="yMin" type="number" style="width:70px; font-size:11px; padding:2px 3px;">
+            </div>
+            <div class="ctl">
+              <span class="lab">Ymax:</span>
+              <input id="yMax" type="number" style="width:70px; font-size:11px; padding:2px 3px;">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gutter"></div>
+
+      <!-- 데이터 섹션 -->
+      <div class="section" id="sec-data">
+        <h3>데이터</h3>
+        <button class="toggle" id="tg-data">접기</button>
+        
+        <div class="settings-group">
+          <div class="settings-row" style="margin-bottom:8px;">
+            <label><input type="checkbox" id="cursorTooltipEnabled" checked> 커서 툴팁</label>
+          </div>
+          <div id="cursorData" class="cursor-data">
+            <div class="cursor-info">
+              <div class="cursor-item">
+                <span class="cursor-label" style="color:#2196F3;">파란색 (시작):</span>
+                <span id="cursor1Info" class="cursor-value">-</span>
+              </div>
+              <div class="cursor-item">
+                <span class="cursor-label" style="color:#f44336;">빨간색 (끝):</span>
+                <span id="cursor2Info" class="cursor-value">-</span>
+              </div>
+              <div class="cursor-item">
+                <span class="cursor-label">거리 (Δ):</span>
+                <span id="cursorDelta" class="cursor-value">-</span>
+              </div>
+            </div>
+            <div class="cursor-hint">
+              <p class="small" style="color:#666; margin-top:8px;">툴팁 표시 중 클릭하여 커서 추가</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="ila.js"></script>
+</body>
+</html>
