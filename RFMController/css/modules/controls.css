@@ -1,0 +1,68 @@
+/* Controls */
+.control-panel {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.command-group {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.button-row,
+.control-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.control-row label {
+    font-size: 0.8rem;
+    color: #ccc;
+    min-width: 50px;
+}
+
+.toggle-group,
+.input-group {
+    display: flex;
+    gap: 4px;
+}
+
+/* Sensor Dual Controls */
+.sensor-dual-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.sensor-column {
+    flex: 1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+.sensor-column h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.85rem;
+    color: #aaa;
+    text-align: center;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Toggle Button States */
+.btn.toggle {
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.btn.toggle.active {
+    background-color: #0066cc;
+    color: white;
+    border-color: #0066cc;
+}

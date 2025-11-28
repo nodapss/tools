@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RF Matcher Control</title>
+    <link rel="stylesheet" href="css/main.css?v=7">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>RF Matcher Control</h1>
+                <div class="connection-panel">
+                    <div class="control-group">
+                        <select id="baudRate">
+                            <option value="9600">9600</option>
+                            <option value="115200">115200</option>
+                            <option value="230400">230400</option>
+                            <option value="460800">460800</option>
+                            <option value="921600" selected>921600</option>
+                        </select>
+                    </div>
+                    <button id="btnRequestPort" class="btn secondary sm">Port</button>
+                    <button id="btnConnect" class="btn primary sm" disabled>Connect</button>
+                    <button id="btnDisconnect" class="btn secondary sm" disabled>Disconnect</button>
+                    <button id="btnToggleMock" class="btn secondary sm">Mock: ON</button>
+                </div>
+            </div>
+
+            <!-- Status Panel -->
+            <div class="status-panel">
+                <div class="status-group">
+                    <span class="status-label">INTERLOCKS</span>
+                    <div class="led-indicator" id="ledCover" title="Cover Open">Cover</div>
+                    <div class="led-indicator" id="ledCable" title="Cable Connection">Cable</div>
+                    <div class="led-indicator" id="ledFanLock" title="Fan Interlock">Fan</div>
+                </div>
+                <div class="status-divider"></div>
+                <div class="status-group">
+                    <span class="status-label">FAULTS</span>
+                    <div class="led-indicator" id="ledRf" title="RF State">RF</div>
+                    <div class="led-indicator" id="ledAuto" title="Auto Match Mode">Auto</div>
+                    <div class="led-indicator" id="ledEthercat" title="Ethercat Status">ECAT</div>
+                    <div class="led-indicator" id="ledTemp" title="Temperature">Temp</div>
+                </div>
+            </div>
+        </header>
+
+        <main class="grid-layout">
+            <!-- Left Column: Controls & VVC -->
+            <div class="column left-col">
+                <section class="panel vvc-panel">
+                    <div class="panel-header-with-toggle">
+                        <h2>VVC Position</h2>
+                        <button id="btnVvcSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                    </div>
+                    <div class="vvc-indicator">
+                        <label>VVC 0</label>
+                        <div class="progress-bg">
+                            <div class="progress-fill" id="vvc1Pos" style="width: 0%"></div>
+                        </div>
+                        <span class="value-text" id="vvc1Val">0%</span>
+                    </div>
+                    <div class="vvc-indicator">
+                        <label>VVC 1</label>
+                        <div class="progress-bg">
+                            <div class="progress-fill" id="vvc2Pos" style="width: 0%"></div>
+                        </div>
+                        <span class="value-text" id="vvc2Val">0%</span>
+                    </div>
+                </section>
+
+                <section class="panel control-panel">
+                    <div class="panel-header-with-toggle">
+                        <h2>Controls</h2>
+                        <button id="btnControlsSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                    </div>
+                    <div class="command-group">
+                        <h3>System</h3>
+                        <div class="button-row">
+                            <button class="btn cmd-btn" data-cmd="da">Auto</button>
+                            <button class="btn cmd-btn" data-cmd="dh">Help</button>
+                        </div>
+                    </div>
+
+                    <div class="command-group">
+                        <h3>INPUT SENSOR</h3>
+                        <div class="button-row">
+                            <button class="btn cmd-btn" data-cmd="ri i">Init</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Impedance</label>
+                            <div class="toggle-group">
+                                <button class="btn sm" id="btnImpSingleInput">Single</button>
+                                <button class="btn sm toggle" id="btnImpRunInput">Run</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>FFT</label>
+                            <button class="btn sm" id="btnFftInput">Get FFT</button>
+                        </div>
+                        <div class="control-row">
+                            <label>V/I Stream</label>
+                            <button class="btn sm toggle" id="btnVIRunInput">Run</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Cal V</label>
+                            <input type="number" id="calVInput" value="1.0" step="0.1" style="width: 50px;">
+                            <button class="btn sm" id="btnSetCalVInput">Set</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Cal I</label>
+                            <input type="number" id="calIInput" value="1.0" step="0.1" style="width: 50px;">
+                            <button class="btn sm" id="btnSetCalIInput">Set</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Cal P</label>
+                            <input type="number" id="calPInput" value="0.0" step="1.0" style="width: 50px;">
+                            <button class="btn sm" id="btnSetCalPInput">Set</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Coupling</label>
+                            <button class="btn sm toggle active" id="btnCouplingInput">AC</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Reset</label>
+                            <button class="btn sm" id="btnResetInput">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="command-group">
+                        <h3>OUTPUT SENSOR</h3>
+                        <div class="button-row">
+                            <button class="btn cmd-btn" data-cmd="ri o">Init</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Impedance</label>
+                            <div class="toggle-group">
+                                <button class="btn sm" id="btnImpSingleOutput">Single</button>
+                                <button class="btn sm toggle" id="btnImpRunOutput">Run</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>FFT</label>
+                            <button class="btn sm" id="btnFftOutput">Get FFT</button>
+                        </div>
+                        <div class="control-row">
+                            <label>V/I Stream</label>
+                            <button class="btn sm toggle" id="btnVIRunOutput">Run</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Cal V</label>
+                            <input type="number" id="calVOutput" value="1.0" step="0.1" style="width: 50px;">
+                            <button class="btn sm" id="btnSetCalVOutput">Set</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Cal I</label>
+                            <input type="number" id="calIOutput" value="1.0" step="0.1" style="width: 50px;">
+                            <button class="btn sm" id="btnSetCalIOutput">Set</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Cal P</label>
+                            <input type="number" id="calPOutput" value="0.0" step="1.0" style="width: 50px;">
+                            <button class="btn sm" id="btnSetCalPOutput">Set</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Coupling</label>
+                            <button class="btn sm toggle active" id="btnCouplingOutput">AC</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Reset</label>
+                            <button class="btn sm" id="btnResetOutput">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="command-group">
+                        <div class="panel-header-with-toggle" style="margin-bottom: 10px;">
+                            <h3 style="margin: 0; border-bottom: none; padding-bottom: 0;">Motor</h3>
+                            <button id="btnMotorSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                        </div>
+                        <div class="control-row">
+                            <label>Init</label>
+                            <div class="toggle-group">
+                                <button class="btn sm motor-drv-btn" id="btnMotorInit0" data-motor="0" data-action="init">M0</button>
+                                <button class="btn sm motor-drv-btn" id="btnMotorInit1" data-motor="1" data-action="init">M1</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Ctrl</label>
+                            <div class="toggle-group">
+                                <button class="btn sm motor-drv-btn" id="btnMotorStby0" data-motor="0" data-action="standby">M0 Stby</button>
+                                <button class="btn sm motor-drv-btn" id="btnMotorStby1" data-motor="1" data-action="standby">M1 Stby</button>
+                                <button class="btn sm motor-drv-btn" id="btnMotorDis0" data-motor="0" data-action="disable">Dis</button>
+                                <button class="btn sm motor-drv-btn" id="btnMotorDis1" data-motor="1" data-action="disable">Dis</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Set Origin</label>
+                            <div class="toggle-group">
+                                <button class="btn sm origin-btn" id="btnOrigin0" data-motor="0" style="background: #8b4513; border-color: #8b4513;">M0</button>
+                                <button class="btn sm origin-btn" id="btnOrigin1" data-motor="1" style="background: #8b4513; border-color: #8b4513;">M1</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Read Pos</label>
+                            <div class="toggle-group">
+                                <button class="btn sm cmd-btn" data-cmd="mgp 0">M0</button>
+                                <button class="btn sm cmd-btn" data-cmd="mgp 1">M1</button>
+                                <button class="btn sm toggle" id="btnMotorPosRun">Run</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Move</label>
+                            <div class="input-group">
+                                <select id="motorSelect" style="width: 50px;">
+                                    <option value="0">M0</option>
+                                    <option value="1">M1</option>
+                                </select>
+                                <input type="number" id="motorPos" value="0" style="width: 60px;">
+                                <button class="btn" id="btnMotorMove">Go</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Force</label>
+                            <div class="input-group">
+                                <select id="motorForceSelect" style="width: 50px;">
+                                    <option value="0">M0</option>
+                                    <option value="1">M1</option>
+                                </select>
+                                <input type="number" id="motorForcePos" value="0" style="width: 60px;">
+                                <button class="btn" id="btnMotorForce" style="background: #8b4513; border-color: #8b4513;">Force</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Middle Column: RF & Impedance -->
+            <div class="column mid-col">
+                <section class="panel viz-panel">
+                    <div class="panel-header-with-toggle">
+                        <h2>Impedance (Smith Chart)</h2>
+                        <button id="btnSmithSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                    </div>
+                    <div class="smith-chart-container">
+                        <canvas id="smithChart"></canvas>
+                    </div>
+                    <div class="impedance-readout">
+                        <div class="readout-item"><span class="label">Mag</span><span class="value"
+                                id="valMag">--</span></div>
+                        <div class="readout-item"><span class="label">Phase</span><span class="value"
+                                id="valPhase">--</span></div>
+                        <div class="readout-item"><span class="label">R</span><span class="value" id="valR">--</span>
+                        </div>
+                        <div class="readout-item"><span class="label">X</span><span class="value" id="valX">--</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel data-panel">
+                    <div class="panel-header-with-toggle">
+                        <h2 id="dataPanelTitle">Frequency Domain (FFT)</h2>
+                        <div class="panel-header-actions">
+                            <button id="btnToggleData" class="btn sm secondary">↔ Time</button>
+                            <button id="btnFftSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                        </div>
+                    </div>
+                    <div class="dual-graph-container">
+                        <div class="graph-item">
+                            <h3>Input Sensor</h3>
+                            <canvas id="rfGraphInput" style="display: block;"></canvas>
+                            <canvas id="fftGraphInput" style="display: none;"></canvas>
+                        </div>
+                        <div class="graph-item">
+                            <h3>Output Sensor</h3>
+                            <canvas id="rfGraphOutput" style="display: block;"></canvas>
+                            <canvas id="fftGraphOutput" style="display: none;"></canvas>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Analysis & Health -->
+            <div class="column right-col">
+                <section class="panel plasma-panel">
+                    <h2>Plasma Analysis</h2>
+                    <div class="graph-group">
+                        <label>Electron Temp (Te)</label>
+                        <canvas id="teGraph"></canvas>
+                    </div>
+                    <div class="graph-group">
+                        <label>Plasma Density (Ni)</label>
+                        <canvas id="niGraph"></canvas>
+                    </div>
+                </section>
+
+                <section class="panel lifespan-panel">
+                    <h2>Component Health</h2>
+                    <div class="health-item">
+                        <div class="health-label"><span>VVC 0</span><span id="lifeVvc1">80%</span></div>
+                        <div class="health-bar">
+                            <div class="health-fill" style="width: 80%"></div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-label"><span>VVC 1</span><span id="lifeVvc2">81%</span></div>
+                        <div class="health-bar">
+                            <div class="health-fill" style="width: 81%"></div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-label"><span>Fan 1</span><span id="lifeFan1">38%</span></div>
+                        <div class="health-bar">
+                            <div class="health-fill warning" style="width: 38%"></div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-label"><span>Fan 2</span><span id="lifeFan2">39%</span></div>
+                        <div class="health-bar">
+                            <div class="health-fill warning" style="width: 39%"></div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-label"><span>FRAM</span><span id="lifeFram">99%</span></div>
+                        <div class="health-bar">
+                            <div class="health-fill" style="width: 99%"></div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-label"><span>CO Sensor</span><span id="lifeCo">15%</span></div>
+                        <div class="health-bar">
+                            <div class="health-fill critical" style="width: 15%"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel terminal-panel">
+                    <div class="terminal-header">
+                        <h2>Terminal</h2>
+                        <div class="terminal-header-actions">
+                            <span id="btnCopyTerminal" class="terminal-action-label" title="Copy">Copy</span>
+                            <button id="btnTerminalSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                        </div>
+                    </div>
+                    <div id="terminal" class="terminal-output"></div>
+                    <div class="terminal-input">
+                        <input type="text" id="cmdInput" placeholder="Command...">
+                        <button id="btnSend" class="btn sm">Send</button>
+                        <button id="btnClearTerminal" class="btn sm secondary">Clear</button>
+                    </div>
+                </section>
+
+                <!-- Terminal Settings Modal -->
+                <div id="terminalSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Terminal Settings</h3>
+                            <button id="btnCloseSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <label for="maxTerminalLines">Max Lines:</label>
+                            <input type="number" id="maxTerminalLines" value="1000" min="50" max="10000" step="50">
+                            <p class="settings-help">Set the maximum number of messages to display.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnSaveSettings" class="btn primary">Save</button>
+                            <button id="btnCancelSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls Settings Modal -->
+                <div id="controlsSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Controls Settings</h3>
+                            <button id="btnCloseControlsSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <h3>Device Info</h3>
+                            <label for="deviceModelName">Model Name:</label>
+                            <input type="text" id="deviceModelName" placeholder="e.g. RF-1000">
+
+                            <label for="deviceManufactureDate">Manufacture Date:</label>
+                            <input type="text" id="deviceManufactureDate" placeholder="YYYY-MM-DD">
+
+                            <label for="deviceSerialNumber">Serial Number:</label>
+                            <input type="text" id="deviceSerialNumber" placeholder="SN-12345678">
+
+                            <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+
+                            <h3>RF Sensor Setting</h3>
+                            <div style="margin-bottom: 12px;">
+                                <label for="impedanceStreamRate">Impedance Stream Rate (ms):</label>
+                                <input type="number" id="impedanceStreamRate" value="100" min="10" max="5000" step="10">
+                                <p class="settings-help">※ Set refresh rate for Impedance Run command.</p>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label for="viStreamRate">V/I Stream Rate (ms):</label>
+                                <input type="number" id="viStreamRate" value="100" min="10" max="5000" step="10">
+                                <p class="settings-help">※ Set refresh rate for V/I Run command.</p>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label for="impedanceAvgCount">Average Count:</label>
+                                <input type="number" id="impedanceAvgCount" value="512" min="1" max="512" step="1">
+                                <p class="settings-help">※ Number of samples to average for sensor measurements.</p>
+                            </div>
+
+                            <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+
+                            <h3>Motor Setting</h3>
+                            <div style="margin-bottom: 12px;">
+                                <label for="motorPosStreamRate">Motor Position Polling Rate (ms):</label>
+                                <input type="number" id="motorPosStreamRate" value="100" min="10" max="5000" step="10">
+                                <p class="settings-help">※ Set refresh rate for Motor Position Run command.</p>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <label for="motorPosSaveRate">FRAM Save Interval (ms):</label>
+                                    <label style="margin-left: auto; font-size: 0.85em;">
+                                        <input type="checkbox" id="motorPosSaveEnabled" checked> Enabled
+                                    </label>
+                                </div>
+                                <input type="number" id="motorPosSaveRate" value="1000" min="100" max="60000" step="100">
+                                <p class="settings-help">※ Interval for auto-saving motor position to FRAM.</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnReadControlsSettings" class="btn secondary">Read</button>
+                            <button id="btnSaveControlsSettings" class="btn primary">Save</button>
+                            <button id="btnCancelControlsSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Smith Chart Settings Modal -->
+                <div id="smithSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Smith Chart Settings</h3>
+                            <button id="btnCloseSmithSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="setting-group">
+                                <label>Display Channels:</label>
+                                <div class="checkbox-group">
+                                    <label><input type="checkbox" id="chkShowInput" checked> Input Impedance</label>
+                                    <label><input type="checkbox" id="chkShowOutput"> Output Impedance</label>
+                                </div>
+                            </div>
+                            <div class="setting-group" style="margin-top: 15px;">
+                                <label>Trace Mode:</label>
+                                <div class="checkbox-group">
+                                    <label><input type="radio" name="traceMode" value="points" checked> Points
+                                        (Fading)</label>
+                                    <label><input type="radio" name="traceMode" value="line"> Line Connect</label>
+                                </div>
+                            </div>
+                            <div class="setting-group" style="margin-top: 15px;">
+                                <label for="traceLength">Trace Length (History):</label>
+                                <input type="number" id="traceLength" value="1" min="1" max="100">
+                                <p class="settings-help">Number of historical points to display</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnSaveSmithSettings" class="btn primary">Save</button>
+                            <button id="btnCancelSmithSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VVC Settings Modal -->
+                <div id="vvcSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="width: 600px;">
+                        <div class="modal-header">
+                            <h3>VVC Position Settings</h3>
+                            <button id="btnCloseVvcSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="vvc-settings-container">
+                                <!-- VVC 0 Settings -->
+                                <div class="vvc-settings-section">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #fff; border-bottom: 1px solid #444; padding-bottom: 6px;">VVC 0</h4>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1CurrentValue">Current:</label>
+                                        <input type="number" id="vvc1CurrentValue" value="0" step="1" class="vvc-input" disabled>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1Percent">Percent:</label>
+                                        <input type="number" id="vvc1Percent" value="0" step="1" class="vvc-input" disabled>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1MinValue">Min:</label>
+                                        <input type="number" id="vvc1MinValue" value="0" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1MaxValue">Max:</label>
+                                        <input type="number" id="vvc1MaxValue" value="64000" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1LowerLimit">Lower Limit:</label>
+                                        <input type="number" id="vvc1LowerLimit" value="4000" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1UpperLimit">Upper Limit:</label>
+                                        <input type="number" id="vvc1UpperLimit" value="60000" step="1" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1MinCap">Min Cap (pF):</label>
+                                        <input type="number" id="vvc1MinCap" value="0" step="0.01" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1MaxCap">Max Cap (pF):</label>
+                                        <input type="number" id="vvc1MaxCap" value="1000" step="0.01" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1FitA0">a0 (const):</label>
+                                        <input type="text" id="vvc1FitA0" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1FitA1">a1 (×xNorm):</label>
+                                        <input type="text" id="vvc1FitA1" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1FitA2">a2 (×xNorm²):</label>
+                                        <input type="text" id="vvc1FitA2" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc1FitA3">a3 (×xNorm³):</label>
+                                        <input type="text" id="vvc1FitA3" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                </div>
+
+                                <!-- VVC 1 Settings -->
+                                <div class="vvc-settings-section">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #fff; border-bottom: 1px solid #444; padding-bottom: 6px;">VVC 1</h4>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2CurrentValue">Current:</label>
+                                        <input type="number" id="vvc2CurrentValue" value="0" step="1" class="vvc-input" disabled>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2Percent">Percent:</label>
+                                        <input type="number" id="vvc2Percent" value="0" step="1" class="vvc-input" disabled>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2MinValue">Min:</label>
+                                        <input type="number" id="vvc2MinValue" value="0" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2MaxValue">Max:</label>
+                                        <input type="number" id="vvc2MaxValue" value="64000" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2LowerLimit">Lower Limit:</label>
+                                        <input type="number" id="vvc2LowerLimit" value="4000" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2UpperLimit">Upper Limit:</label>
+                                        <input type="number" id="vvc2UpperLimit" value="60000" step="1" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2MinCap">Min Cap (pF):</label>
+                                        <input type="number" id="vvc2MinCap" value="0" step="0.01" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2MaxCap">Max Cap (pF):</label>
+                                        <input type="number" id="vvc2MaxCap" value="1000" step="0.01" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2FitA0">a0 (const):</label>
+                                        <input type="text" id="vvc2FitA0" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2FitA1">a1 (×xNorm):</label>
+                                        <input type="text" id="vvc2FitA1" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2FitA2">a2 (×xNorm²):</label>
+                                        <input type="text" id="vvc2FitA2" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="vvc2FitA3">a3 (×xNorm³):</label>
+                                        <input type="text" id="vvc2FitA3" value="0" class="vvc-input" style="font-size: 0.75rem;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnReadVvcSettings" class="btn secondary">Read</button>
+                            <button id="btnSaveVvcSettings" class="btn primary">Save</button>
+                            <button id="btnCancelVvcSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Motor Settings Modal (DRV8711 SPI Registers) -->
+                <div id="motorSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="width: 750px; max-height: 90vh; overflow-y: auto;">
+                        <div class="modal-header">
+                            <h3>Motor Driver Settings (DRV8711)</h3>
+                            <button id="btnCloseMotorSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="vvc-settings-container">
+                                <!-- Motor 1 Settings -->
+                                <div class="vvc-settings-section">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #fff; border-bottom: 1px solid #444; padding-bottom: 6px;">Motor 1 (SPI 1)</h4>
+                                    
+                                    <!-- Control Commands -->
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="font-size: 0.75rem; color: #888;">Control Commands</label>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1StandbyVal">Standby:</label>
+                                        <input type="number" id="motor1StandbyVal" value="553" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1DisableVal">Disable:</label>
+                                        <input type="number" id="motor1DisableVal" value="552" step="1" class="vvc-input">
+                                    </div>
+                                    
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    
+                                    <!-- Init Registers -->
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="font-size: 0.75rem; color: #888;">Init Registers</label>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegCtrl">CTRL (0):</label>
+                                        <input type="number" id="motor1RegCtrl" value="552" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegTorque">TORQUE (1):</label>
+                                        <input type="number" id="motor1RegTorque" value="384" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegOff">OFF (2):</label>
+                                        <input type="number" id="motor1RegOff" value="15" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegBlank">BLANK (3):</label>
+                                        <input type="number" id="motor1RegBlank" value="336" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegDecay">DECAY (4):</label>
+                                        <input type="number" id="motor1RegDecay" value="508" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegStall">STALL (5):</label>
+                                        <input type="number" id="motor1RegStall" value="1200" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor1RegDrive">DRIVE (6):</label>
+                                        <input type="number" id="motor1RegDrive" value="5" step="1" class="vvc-input">
+                                    </div>
+                                    
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    
+                                    <!-- Status Registers (Read-only) -->
+                                    <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                        <label style="font-size: 0.75rem; color: #888;">Status Registers</label>
+                                        <button id="btnReadStatus1" class="btn sm secondary">Read Status</button>
+                                    </div>
+                                    <div id="motor1StatusDisplay" style="font-family: monospace; font-size: 0.75rem; color: #aaa; background: #1a1a1a; padding: 8px; border-radius: 4px; min-height: 60px;">
+                                        Click "Read Status" to load...
+                                    </div>
+                                </div>
+
+                                <!-- Motor 2 Settings -->
+                                <div class="vvc-settings-section">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #fff; border-bottom: 1px solid #444; padding-bottom: 6px;">Motor 2 (SPI 2)</h4>
+                                    
+                                    <!-- Control Commands -->
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="font-size: 0.75rem; color: #888;">Control Commands</label>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2StandbyVal">Standby:</label>
+                                        <input type="number" id="motor2StandbyVal" value="553" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2DisableVal">Disable:</label>
+                                        <input type="number" id="motor2DisableVal" value="552" step="1" class="vvc-input">
+                                    </div>
+                                    
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    
+                                    <!-- Init Registers -->
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="font-size: 0.75rem; color: #888;">Init Registers</label>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegCtrl">CTRL (0):</label>
+                                        <input type="number" id="motor2RegCtrl" value="552" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegTorque">TORQUE (1):</label>
+                                        <input type="number" id="motor2RegTorque" value="384" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegOff">OFF (2):</label>
+                                        <input type="number" id="motor2RegOff" value="15" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegBlank">BLANK (3):</label>
+                                        <input type="number" id="motor2RegBlank" value="336" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegDecay">DECAY (4):</label>
+                                        <input type="number" id="motor2RegDecay" value="508" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegStall">STALL (5):</label>
+                                        <input type="number" id="motor2RegStall" value="1200" step="1" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="motor2RegDrive">DRIVE (6):</label>
+                                        <input type="number" id="motor2RegDrive" value="5" step="1" class="vvc-input">
+                                    </div>
+                                    
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    
+                                    <!-- Status Registers (Read-only) -->
+                                    <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                        <label style="font-size: 0.75rem; color: #888;">Status Registers</label>
+                                        <button id="btnReadStatus2" class="btn sm secondary">Read Status</button>
+                                    </div>
+                                    <div id="motor2StatusDisplay" style="font-family: monospace; font-size: 0.75rem; color: #aaa; background: #1a1a1a; padding: 8px; border-radius: 4px; min-height: 60px;">
+                                        Click "Read Status" to load...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnSaveMotorSettings" class="btn primary">Save</button>
+                            <button id="btnCancelMotorSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FFT/Time Graph Settings Modal -->
+                <div id="fftSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="width: 700px;">
+                        <div class="modal-header">
+                            <h3>Graph Settings</h3>
+                            <button id="btnCloseFftSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="vvc-settings-container">
+                                <!-- Input Sensor Settings -->
+                                <div class="vvc-settings-section">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #fff; border-bottom: 1px solid #444; padding-bottom: 6px;">Input Sensor</h4>
+                                    <div class="vvc-setting-row" style="display: flex; gap: 20px;">
+                                        <label><input type="checkbox" id="fftAutoScaleInput" checked> Auto Scaling</label>
+                                        <label><input type="checkbox" id="fftIndependentAxisInput" checked> Independent Y-Axis</label>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="fftMarginInput">Margin (%):</label>
+                                        <input type="number" id="fftMarginInput" value="10" min="0" max="100" step="1" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="fftYMinInput">Y Min:</label>
+                                        <input type="number" id="fftYMinInput" value="0" step="0.1" class="vvc-input" disabled>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="fftYMaxInput">Y Max:</label>
+                                        <input type="number" id="fftYMaxInput" value="100" step="0.1" class="vvc-input" disabled>
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row" style="display: flex; gap: 10px;">
+                                        <div style="flex: 1;">
+                                            <label for="fftVOffsetInput">V Offset (%):</label>
+                                            <input type="number" id="fftVOffsetInput" value="0" min="-50" max="50" step="1" class="vvc-input" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="fftIOffsetInput">I Offset (%):</label>
+                                            <input type="number" id="fftIOffsetInput" value="0" min="-50" max="50" step="1" class="vvc-input" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="fftSamplingRateInput">Sampling Rate (Hz):</label>
+                                        <input type="number" id="fftSamplingRateInput" value="100000000" step="1000000" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="fftLengthInput">FFT Length:</label>
+                                        <input type="number" id="fftLengthInput" value="1024" step="1" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="fftXAxisDisplayInput">X-Axis Display:</label>
+                                        <select id="fftXAxisDisplayInput" class="vvc-input">
+                                            <option value="physical" selected>Physical (MHz/Time)</option>
+                                            <option value="index">Index</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Output Sensor Settings -->
+                                <div class="vvc-settings-section">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #fff; border-bottom: 1px solid #444; padding-bottom: 6px;">Output Sensor</h4>
+                                    <div class="vvc-setting-row" style="display: flex; gap: 20px;">
+                                        <label><input type="checkbox" id="fftAutoScaleOutput" checked> Auto Scaling</label>
+                                        <label><input type="checkbox" id="fftIndependentAxisOutput" checked> Independent Y-Axis</label>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="fftMarginOutput">Margin (%):</label>
+                                        <input type="number" id="fftMarginOutput" value="10" min="0" max="100" step="1" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="fftYMinOutput">Y Min:</label>
+                                        <input type="number" id="fftYMinOutput" value="0" step="0.1" class="vvc-input" disabled>
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="fftYMaxOutput">Y Max:</label>
+                                        <input type="number" id="fftYMaxOutput" value="100" step="0.1" class="vvc-input" disabled>
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row" style="display: flex; gap: 10px;">
+                                        <div style="flex: 1;">
+                                            <label for="fftVOffsetOutput">V Offset (%):</label>
+                                            <input type="number" id="fftVOffsetOutput" value="0" min="-50" max="50" step="1" class="vvc-input" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="fftIOffsetOutput">I Offset (%):</label>
+                                            <input type="number" id="fftIOffsetOutput" value="0" min="-50" max="50" step="1" class="vvc-input" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="fftSamplingRateOutput">Sampling Rate (Hz):</label>
+                                        <input type="number" id="fftSamplingRateOutput" value="100000000" step="1000000" class="vvc-input">
+                                    </div>
+                                    <div class="vvc-setting-row">
+                                        <label for="fftLengthOutput">FFT Length:</label>
+                                        <input type="number" id="fftLengthOutput" value="1024" step="1" class="vvc-input">
+                                    </div>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                                    <div class="vvc-setting-row">
+                                        <label for="fftXAxisDisplayOutput">X-Axis Display:</label>
+                                        <select id="fftXAxisDisplayOutput" class="vvc-input">
+                                            <option value="physical" selected>Physical (MHz/Time)</option>
+                                            <option value="index">Index</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="settings-help" style="margin-top: 15px;">※ FFT mode: X-axis shows frequency (MHz). Time mode: X-axis shows time (auto unit). Use mouse wheel to zoom, drag to pan, double-click to reset.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnSaveFftSettings" class="btn primary">Save</button>
+                            <button id="btnCancelFftSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div id="graphTooltip" class="graph-tooltip" style="display: none;"></div>
+    <script src="smithchart.js"></script>
+    <script src="js/namespace.js"></script>
+    <script src="js/ui/ui.js"></script>
+    <script src="js/ui/terminal.js"></script>
+    <script src="js/ui/charts.js"></script>
+    <script src="js/modules/protocol.js"></script>
+    <script src="js/modules/mockData.js"></script>
+    <script src="js/core/serial.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>

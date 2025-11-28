@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RF Matcher 명령어 레퍼런스</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #fff;
+        }
+
+        .back-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
+        }
+
+        .section {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #fff;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        h3 {
+            color: var(--accent-color);
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        code {
+            font-family: var(--font-mono);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--success-color);
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            margin: 15px 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-family: var(--font-mono);
+            font-size: 14px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            color: var(--text-color);
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .note {
+            color: #888;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            margin-top: 40px;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>RF Matcher 명령어 레퍼런스</h1>
+            <a href="../index.html" class="back-btn">← Back to Control</a>
+        </div>
+
+        <div class="section">
+            <h2>명령어 패턴</h2>
+            <pre><code>[분류][동작][대상]
+ 1st   2nd   3rd
+
+분류: r=RF센서, m=Motor, d=Device
+동작: i=Init, s=Set, g=Get, r=Run, ...
+대상: c=Calibration, l=Limits, s=Status, ...</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>RF 센서 명령어 (r*)</h2>
+            <p class="note">채널: <code>i</code> = Input, <code>o</code> = Output</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>명령어</th>
+                        <th>구조</th>
+                        <th>설명</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>ri</td>
+                        <td>R-Init</td>
+                        <td>ADC 초기화</td>
+                        <td>ri i</td>
+                    </tr>
+                    <tr>
+                        <td>rrs</td>
+                        <td>R-Run-Stream</td>
+                        <td>임피던스 스트림</td>
+                        <td>rrs i run 100</td>
+                    </tr>
+                    <tr>
+                        <td>rrv</td>
+                        <td>R-Run-Vi</td>
+                        <td>V/I 스트림</td>
+                        <td>rrv i run</td>
+                    </tr>
+                    <tr>
+                        <td>rf</td>
+                        <td>R-Fft</td>
+                        <td>FFT 데이터</td>
+                        <td>rf i</td>
+                    </tr>
+                    <tr>
+                        <td>rz</td>
+                        <td>R-Z</td>
+                        <td>단일 임피던스</td>
+                        <td>rz i 10</td>
+                    </tr>
+                    <tr>
+                        <td>rk</td>
+                        <td>R-Coupling</td>
+                        <td>AC/DC 설정</td>
+                        <td>rk i ac</td>
+                    </tr>
+                    <tr>
+                        <td>rr</td>
+                        <td>R-Reset</td>
+                        <td>설정 리셋</td>
+                        <td>rr i</td>
+                    </tr>
+                    <tr>
+                        <td>rsc</td>
+                        <td>R-Set-Cal</td>
+                        <td>Calibration 설정</td>
+                        <td>rsc i v 1.0</td>
+                    </tr>
+                    <tr>
+                        <td>rgc</td>
+                        <td>R-Get-Cal</td>
+                        <td>Calibration 조회</td>
+                        <td>rgc i</td>
+                    </tr>
+                    <tr>
+                        <td>rsa</td>
+                        <td>R-Set-Avg</td>
+                        <td>Average 설정</td>
+                        <td>rsa i 512</td>
+                    </tr>
+                    <tr>
+                        <td>rga</td>
+                        <td>R-Get-Avg</td>
+                        <td>Average 조회</td>
+                        <td>rga i</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Motor 명령어 (m*)</h2>
+            <p class="note">인덱스: <code>0</code> = Motor0, <code>1</code> = Motor1 (0-based)</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>명령어</th>
+                        <th>구조</th>
+                        <th>설명</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>mi</td>
+                        <td>M-Init</td>
+                        <td>드라이버 초기화</td>
+                        <td>mi 0</td>
+                    </tr>
+                    <tr>
+                        <td>mr</td>
+                        <td>M-Run</td>
+                        <td>위치 이동</td>
+                        <td>mr 0 32000</td>
+                    </tr>
+                    <tr>
+                        <td>mf</td>
+                        <td>M-Force</td>
+                        <td>강제 이동</td>
+                        <td>mf 0 50000</td>
+                    </tr>
+                    <tr>
+                        <td>mo</td>
+                        <td>M-Origin</td>
+                        <td>원점 설정</td>
+                        <td>mo 0</td>
+                    </tr>
+                    <tr>
+                        <td>mgp</td>
+                        <td>M-Get-Pos</td>
+                        <td>Position 조회</td>
+                        <td>mgp 0</td>
+                    </tr>
+                    <tr>
+                        <td>msc</td>
+                        <td>M-Set-Ctrl</td>
+                        <td>Control 설정</td>
+                        <td>msc 0 553</td>
+                    </tr>
+                    <tr>
+                        <td>mst</td>
+                        <td>M-Set-Torque</td>
+                        <td>Torque 설정</td>
+                        <td>mst 0 100</td>
+                    </tr>
+                    <tr>
+                        <td>mgs</td>
+                        <td>M-Get-Status</td>
+                        <td>Status 조회</td>
+                        <td>mgs 0</td>
+                    </tr>
+                    <tr>
+                        <td>msd</td>
+                        <td>M-Set-Driver</td>
+                        <td>Driver 설정</td>
+                        <td>msd 0 553,552...</td>
+                    </tr>
+                    <tr>
+                        <td>msl</td>
+                        <td>M-Set-Limits</td>
+                        <td>Limit + Cap 설정</td>
+                        <td>msl 0 0,64000,4000,60000,0,10000<br><small>min,max,lower,upper,minCap,maxCap (Cap: pF×10)</small></td>
+                    </tr>
+                    <tr>
+                        <td>mgl</td>
+                        <td>M-Get-Limits</td>
+                        <td>Limit + Cap 조회</td>
+                        <td>mgl 0</td>
+                    </tr>
+                    <tr>
+                        <td>mrp</td>
+                        <td>M-Run-Position</td>
+                        <td>Position 스트림</td>
+                        <td>mrp run 100</td>
+                    </tr>
+                    <tr>
+                        <td>mss</td>
+                        <td>M-Set-Settings</td>
+                        <td>Stream 전체 설정</td>
+                        <td>mss 100 100 100 1000 1</td>
+                    </tr>
+                    <tr>
+                        <td>msg</td>
+                        <td>M-Setting-Get</td>
+                        <td>Stream 설정 조회</td>
+                        <td>msg</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Device 명령어 (d*)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>명령어</th>
+                        <th>구조</th>
+                        <th>설명</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>da</td>
+                        <td>D-Auto</td>
+                        <td>Auto 모드 전환</td>
+                        <td>da</td>
+                    </tr>
+                    <tr>
+                        <td>dh</td>
+                        <td>D-Help</td>
+                        <td>도움말</td>
+                        <td>dh</td>
+                    </tr>
+                    <tr>
+                        <td>dsi</td>
+                        <td>D-Set-Info</td>
+                        <td>장치 정보 설정</td>
+                        <td>dsi Model,Date...</td>
+                    </tr>
+                    <tr>
+                        <td>dgi</td>
+                        <td>D-Get-Info</td>
+                        <td>장치 정보 조회</td>
+                        <td>dgi</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>OpCode 응답</h2>
+
+            <h3>RF 센서</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>OpCode</th>
+                        <th>설명</th>
+                        <th>형식</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>ZI</td>
+                        <td>Input 임피던스</td>
+                        <td>ZI,&lt;mag&gt;,&lt;phase&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>ZO</td>
+                        <td>Output 임피던스</td>
+                        <td>ZO,&lt;mag&gt;,&lt;phase&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>VI</td>
+                        <td>Input V/I</td>
+                        <td>VI,&lt;v&gt;,&lt;i&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>VO</td>
+                        <td>Output V/I</td>
+                        <td>VO,&lt;v&gt;,&lt;i&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>FI</td>
+                        <td>Input FFT (V)</td>
+                        <td>FI,&lt;v0&gt;,...,&lt;v1023&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>CI</td>
+                        <td>Input FFT (I)</td>
+                        <td>CI,&lt;i0&gt;,...,&lt;i1023&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>FO</td>
+                        <td>Output FFT (V)</td>
+                        <td>FO,&lt;v0&gt;,...,&lt;v1023&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>CO</td>
+                        <td>Output FFT (I)</td>
+                        <td>CO,&lt;i0&gt;,...,&lt;i1023&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>RGC</td>
+                        <td>Get Calibration</td>
+                        <td>RGC,&lt;ch&gt;,&lt;v&gt;,&lt;i&gt;,&lt;p&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>RGA</td>
+                        <td>Get Average</td>
+                        <td>RGA,&lt;ch&gt;,&lt;count&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>SST</td>
+                        <td>Sensor Stream Settings</td>
+                        <td>SST,&lt;impRate&gt;,&lt;viRate&gt;,EN</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Motor</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>OpCode</th>
+                        <th>설명</th>
+                        <th>형식</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>MGP</td>
+                        <td>Get Position</td>
+                        <td>MGP,&lt;idx&gt;,&lt;pos&gt;,&lt;percent&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>MGL</td>
+                        <td>Get Limits + Cap</td>
+                        <td>MGL,&lt;idx&gt;,&lt;min&gt;,&lt;max&gt;,&lt;lower&gt;,&lt;upper&gt;,&lt;minCap&gt;,&lt;maxCap&gt;,&lt;pos&gt;,%,&lt;cap&gt;,EN<br><small>Cap values: pF×10 (integer)</small></td>
+                    </tr>
+                    <tr>
+                        <td>MGS</td>
+                        <td>Get Status</td>
+                        <td>MGS,&lt;idx&gt;,&lt;r0&gt;,&lt;r1&gt;,&lt;r2&gt;,&lt;r3&gt;,&lt;r4&gt;,&lt;r5&gt;,&lt;r6&gt;,&lt;r7&gt;,EN
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>MPB</td>
+                        <td>Position Both + Cap</td>
+                        <td>MPB,&lt;pos0&gt;,&lt;%0&gt;,&lt;cap0&gt;,&lt;pos1&gt;,&lt;%1&gt;,&lt;cap1&gt;,EN<br><small>Cap values: pF×10 (integer)</small></td>
+                    </tr>
+                    <tr>
+                        <td>MST</td>
+                        <td>Motor Settings</td>
+                        <td>MST,&lt;posStreamRate&gt;,&lt;saveRate&gt;,&lt;saveEnabled&gt;,EN</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Device</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>OpCode</th>
+                        <th>설명</th>
+                        <th>형식</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>DGI</td>
+                        <td>Get Info</td>
+                        <td>DGI,&lt;model&gt;,&lt;date&gt;,&lt;serial&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>ACK</td>
+                        <td>Acknowledgment</td>
+                        <td>ACK,&lt;cmd&gt;,&lt;status&gt;,EN</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>DRV8711 레지스터</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Addr</th>
+                        <th>Name</th>
+                        <th>설명</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>0x00</td>
+                        <td>CTRL</td>
+                        <td>Control</td>
+                        <td>553/552</td>
+                    </tr>
+                    <tr>
+                        <td>0x01</td>
+                        <td>TORQUE</td>
+                        <td>Torque</td>
+                        <td>384</td>
+                    </tr>
+                    <tr>
+                        <td>0x02</td>
+                        <td>OFF</td>
+                        <td>Off Time</td>
+                        <td>15</td>
+                    </tr>
+                    <tr>
+                        <td>0x03</td>
+                        <td>BLANK</td>
+                        <td>Blank Time</td>
+                        <td>336</td>
+                    </tr>
+                    <tr>
+                        <td>0x04</td>
+                        <td>DECAY</td>
+                        <td>Decay Mode</td>
+                        <td>508</td>
+                    </tr>
+                    <tr>
+                        <td>0x05</td>
+                        <td>STALL</td>
+                        <td>Stall Detect</td>
+                        <td>1200</td>
+                    </tr>
+                    <tr>
+                        <td>0x06</td>
+                        <td>DRIVE</td>
+                        <td>Gate Drive</td>
+                        <td>5</td>
+                    </tr>
+                    <tr>
+                        <td>0x07</td>
+                        <td>STATUS</td>
+                        <td>Status (RO)</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>명령어 요약</h2>
+            <pre><code>RF (r*)      ri, rrs, rrv, rf, rz, rk, rr, rsc, rgc, rsa, rga
+Motor (m*)   mi, mr, mf, mo, mgp, mrp, mss, msg, msc, mst, mgs, msd, msl, mgl
+Device (d*)  da, dh, dsi, dgi</code></pre>
+        </div>
+
+        <div class="footer">
+            v1.0 - 2025-11-26
+        </div>
+    </div>
+</body>
+
+</html>
