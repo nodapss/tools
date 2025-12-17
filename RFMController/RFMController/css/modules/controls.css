@@ -1,0 +1,133 @@
+/* Controls */
+.control-panel {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.command-group {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.button-row,
+.control-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.control-row label {
+    font-size: 0.8rem;
+    color: #ccc;
+    min-width: 50px;
+}
+
+.toggle-group,
+.input-group {
+    display: flex;
+    gap: 4px;
+}
+
+/* Sensor Dual Controls */
+.sensor-dual-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.sensor-column {
+    flex: 1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+.sensor-column h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.85rem;
+    color: #aaa;
+    text-align: center;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Toggle Button States */
+.btn.toggle {
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.btn.toggle.active {
+    background-color: #0066cc;
+    color: white;
+    border-color: #0066cc;
+}
+
+/* Command Group Header with Actions */
+.command-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.command-group-header h3 {
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+}
+
+.command-group-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+/* Collapse Button */
+.collapse-btn {
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 6px;
+    border-radius: 3px;
+    transition: color 0.2s, background-color 0.2s;
+    line-height: 1;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.collapse-btn:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.collapse-btn.collapsed {
+    color: #888;
+}
+
+/* Command Group Content - Collapsible */
+.command-group-content {
+    overflow: hidden;
+    max-height: 2000px;
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+    opacity: 1;
+}
+
+.command-group-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+}

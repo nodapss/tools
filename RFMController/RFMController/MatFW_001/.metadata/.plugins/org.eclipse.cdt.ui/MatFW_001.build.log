@@ -1,0 +1,71 @@
+18:11:51 **** Incremental Build of configuration Debug for project MatFW_001 ****
+make all 
+make --no-print-directory pre-build
+a9-linaro-pre-build-step
+' '
+make --no-print-directory main-build
+'Building file: ../src/main.cpp'
+'Invoking: ARM v7 g++ compiler'
+arm-none-eabi-g++ -Wall -O0 -g3 -c -fmessage-length=0 -MT"src/main.o" -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard -IC:/Users/admin/Documents/Projects_SEMES/RFMatcher/SAMBB_v1.01.007/Vitis/MatFW_001/design_1_wrapper/export/design_1_wrapper/sw/design_1_wrapper/standalone_ps7_cortexa9_0/bspinclude/include -MMD -MP -MF"src/main.d" -MT"src/main.o" -o "src/main.o" "../src/main.cpp"
+In file included from ../src/main.cpp:6:
+../src/Communication.hpp: In function 'void Communication::handler_uart_impl(void*)':
+../src/Communication.hpp:33:9: warning: variable 'isr_status' set but not used [-Wunused-but-set-variable]
+   33 |     u32 isr_status;
+      |         ^~~~~~~~~~
+In file included from ../src/main.cpp:8:
+../src/MotionBoard.hpp: In constructor 'MotorController::MotorController()':
+../src/MotionBoard.hpp:310:14: warning: 'MotorController::overrideRpmValue' will be initialized after [-Wreorder]
+  310 |     uint32_t overrideRpmValue;  // Cached override RPM value
+      |              ^~~~~~~~~~~~~~~~
+../src/MotionBoard.hpp:123:11: warning:   'MotorController::Field MotorController::Pos' [-Wreorder]
+  123 |     Field Pos;
+      |           ^~~
+../src/MotionBoard.hpp:320:1: warning:   when initialized here [-Wreorder]
+  320 | MotorController::MotorController()
+      | ^~~~~~~~~~~~~~~
+../src/MotionBoard.hpp: In constructor 'MotorController::MotorController(uintptr_t, uintptr_t)':
+../src/MotionBoard.hpp:310:14: warning: 'MotorController::overrideRpmValue' will be initialized after [-Wreorder]
+  310 |     uint32_t overrideRpmValue;  // Cached override RPM value
+      |              ^~~~~~~~~~~~~~~~
+../src/MotionBoard.hpp:123:11: warning:   'MotorController::Field MotorController::Pos' [-Wreorder]
+  123 |     Field Pos;
+      |           ^~~
+../src/MotionBoard.hpp:330:1: warning:   when initialized here [-Wreorder]
+  330 | MotorController::MotorController(uintptr_t outGpioBase, uintptr_t inGpioBase)
+      | ^~~~~~~~~~~~~~~
+../src/MotionBoard.hpp: In constructor 'MotionBoard::MotionBoard(u8, int, int, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t)':
+../src/MotionBoard.hpp:939:15: warning: 'MotionBoard::m2ExtGpioBase' will be initialized after [-Wreorder]
+  939 |     uintptr_t m2ExtGpioBase;
+      |               ^~~~~~~~~~~~~
+../src/MotionBoard.hpp:839:21: warning:   'MotorController MotionBoard::M1' [-Wreorder]
+  839 |     MotorController M1;
+      |                     ^~
+../src/MotionBoard.hpp:947:1: warning:   when initialized here [-Wreorder]
+  947 | MotionBoard::MotionBoard(u8 boardAddr,
+      | ^~~~~~~~~~~
+In file included from ../src/DebugMode.hpp:22,
+                 from ../src/main.cpp:9:
+../src/MatchingAlgorithm.hpp: In member function 'void MatchingAlgorithm::calculateRCFromOutputCoeffs(double, RCFromOutputCoeffs&) const':
+../src/MatchingAlgorithm.hpp:402:16: warning: unused variable 'VVC12' [-Wunused-variable]
+  402 |         double VVC12 = VVC1 * VVC1;
+      |                ^~~~~
+../src/Communication.hpp: At global scope:
+../src/Communication.hpp:26:22: warning: 'Communication::Tx_buf' defined but not used [-Wunused-variable]
+   26 | static unsigned char Tx_buf[UART_TX_BUF_SIZE];
+      |                      ^~~~~~
+'Finished building: ../src/main.cpp'
+' '
+'Building target: MatFW_001.elf'
+'Invoking: ARM v7 g++ linker'
+arm-none-eabi-g++ -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard -Wl,-build-id=none -specs=Xilinx.spec -Wl,-T -Wl,../src/lscript.ld -LC:/Users/admin/Documents/Projects_SEMES/RFMatcher/SAMBB_v1.01.007/Vitis/MatFW_001/design_1_wrapper/export/design_1_wrapper/sw/design_1_wrapper/standalone_ps7_cortexa9_0/bsplib/lib -o "MatFW_001.elf"  ./src/main.o   -Wl,--start-group,-lxil,-lgcc,-lc,-lstdc++,--end-group
+'Finished building target: MatFW_001.elf'
+' '
+'Invoking: ARM v7 Print Size'
+arm-none-eabi-size MatFW_001.elf  |tee "MatFW_001.elf.size"
+   text	   data	    bss	    dec	    hex	filename
+ 209185	   3372	  32160	 244717	  3bbed	MatFW_001.elf
+'Finished building: MatFW_001.elf.size'
+' '
+
+18:11:55 Build Finished (took 4s.129ms)
+

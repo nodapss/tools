@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RF Circuit Simulator</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components/toolbar.css">
+    <link rel="stylesheet" href="css/components/canvas.css">
+    <link rel="stylesheet" href="css/components/properties.css">
+    <link rel="stylesheet" href="css/components/inline-slider.css">
+    <link rel="stylesheet" href="css/components/script-modal.css">
+    <link rel="stylesheet" href="css/components/draw.css">
+    <link rel="stylesheet" href="css/components/marker.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!-- Chart.js for S11 Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Chart.js Zoom Plugin for scroll zoom -->
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <!-- Header Removed -->
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Component Palette (Left Sidebar) -->
+            <aside class="sidebar left-sidebar">
+                <div class="header-left">
+                    <h1 class="logo">RF Circuit Simulator</h1>
+                    <button id="btnSettings" class="icon-btn" title="Global Settings"
+                        style="margin-left: 10px; background: none; border: none; color: var(--text-color); cursor: pointer;">
+                        <span class="icon">⚙️</span>
+                    </button>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">GRAB</h2>
+                    <div class="tool-buttons">
+                        <button id="btnSelect" class="tool-btn" title="Select (S)">
+                            <span class="icon">⬚</span> Circuit (S)
+                        </button>
+                        <button id="btnDeselect" class="tool-btn" title="Deselect (Esc)">
+                            <span class="icon">✖</span> Sheet (Esc)
+                        </button>
+                        <button id="btnWireComponent" class="tool-btn" title="Wire (W)">
+                            <span class="icon">〰</span> Wire (W)
+                        </button>
+                        <button id="btnPaint" class="tool-btn" title="Paint (P)">
+                            <span class="icon">🎨</span> Paint (P)
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">Components (c)</h2>
+                    <div class="component-palette" id="componentPalette">
+                        <div class="component-item" data-type="R" draggable="true" title="Resistor (r)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <line x1="0" y1="12" x2="10" y2="12" stroke="currentColor" stroke-width="2" />
+                                <path d="M10,12 L14,4 L22,20 L30,4 L38,20 L46,4 L50,12" fill="none"
+                                    stroke="currentColor" stroke-width="2" />
+                                <line x1="50" y1="12" x2="60" y2="12" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                            <span>Resistor (r)</span>
+                        </div>
+                        <div class="component-item" data-type="L" draggable="true" title="Inductor (l)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <line x1="0" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="2" />
+                                <path d="M8,12 Q14,0 20,12 Q26,24 32,12 Q38,0 44,12 Q50,24 52,12" fill="none"
+                                    stroke="currentColor" stroke-width="2" />
+                                <line x1="52" y1="12" x2="60" y2="12" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                            <span>Inductor (l)</span>
+                        </div>
+                        <div class="component-item" data-type="C" draggable="true" title="Capacitor (c)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <line x1="0" y1="12" x2="25" y2="12" stroke="currentColor" stroke-width="2" />
+                                <line x1="25" y1="2" x2="25" y2="22" stroke="currentColor" stroke-width="2" />
+                                <line x1="35" y1="2" x2="35" y2="22" stroke="currentColor" stroke-width="2" />
+                                <line x1="35" y1="12" x2="60" y2="12" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                            <span>Capacitor (c)</span>
+                        </div>
+                        <div class="component-item" data-type="GND" draggable="true" title="Ground (g)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <line x1="30" y1="0" x2="30" y2="8" stroke="currentColor" stroke-width="2" />
+                                <line x1="18" y1="8" x2="42" y2="8" stroke="currentColor" stroke-width="2" />
+                                <line x1="22" y1="13" x2="38" y2="13" stroke="currentColor" stroke-width="2" />
+                                <line x1="26" y1="18" x2="34" y2="18" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                            <span>Ground (g)</span>
+                        </div>
+                        <div class="component-item" data-type="TL" draggable="true" title="Transmission Line (t)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <line x1="0" y1="8" x2="60" y2="8" stroke="currentColor" stroke-width="2" />
+                                <line x1="0" y1="16" x2="60" y2="16" stroke="currentColor" stroke-width="2" />
+                                <line x1="10" y1="8" x2="10" y2="16" stroke="currentColor" stroke-width="1"
+                                    stroke-dasharray="2,2" />
+                                <line x1="50" y1="8" x2="50" y2="16" stroke="currentColor" stroke-width="1"
+                                    stroke-dasharray="2,2" />
+                            </svg>
+                            <span>T-Line (t)</span>
+                        </div>
+                        <div class="component-item" data-type="PORT" draggable="true" title="Port (p)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <circle cx="20" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+                                <line x1="28" y1="12" x2="60" y2="12" stroke="currentColor" stroke-width="2" />
+                                <text x="20" y="16" text-anchor="middle" font-size="10" fill="currentColor">P</text>
+                            </svg>
+                            <span>Port (p)</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel mode-indicator">
+                    <span class="mode-label">Mode:</span>
+                    <span id="currentMode" class="mode-value">None</span>
+                </div>
+                <!-- DRAW Panel -->
+                <div class="panel">
+                    <h2 class="panel-title">PAINT (P)</h2>
+                    <div class="tool-buttons" id="drawToolbar">
+                        <button class="tool-btn" data-tool="pen" title="Pen (p)">
+                            <span class="icon">✎</span>
+                        </button>
+                        <button class="tool-btn" data-tool="circle" title="Circle (c)">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                        </button>
+                        <button class="tool-btn" data-tool="rect" title="Rectangle (r)">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor"
+                                    stroke-width="2" />
+                            </svg>
+                        </button>
+                        <button class="tool-btn" data-tool="arrow" title="Arrow (a)">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2" />
+                                <path d="M14 4H20V10" fill="none" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                        </button>
+                        <button class="tool-btn" data-tool="text" title="Text (t)">
+                            <span class="icon">T</span>
+                        </button>
+                        <button class="tool-btn danger" data-tool="clear" title="Clear (Del)">
+                            <span class="icon">🗑️</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel properties-panel">
+                    <h2 class="panel-title">Properties</h2>
+                    <div id="propertiesContent" class="properties-content">
+                        <p class="placeholder-text">Select a component to edit its properties</p>
+                    </div>
+                </div>
+                <div class="panel circuit-info-panel">
+                    <h2 class="panel-title">Circuit Info</h2>
+                    <div id="circuitInfo" class="circuit-info">
+                        <div class="info-row">
+                            <span class="info-label">Components:</span>
+                            <span id="componentCount" class="info-value">0</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Wires:</span>
+                            <span id="wireCount" class="info-value">0</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Ports:</span>
+                            <span id="portCount" class="info-value">0</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Circuit Canvas (Center) -->
+            <section class="canvas-container">
+                <div class="panel circuit-panel">
+                    <!-- Circuit Header (Browser styling) -->
+                    <div class="circuit-header">
+                        <h2 class="panel-title">Circuit Sheet</h2>
+                        <div class="header-right">
+                            <button id="btnScript" class="btn secondary" title="Script Editor">
+                                <span class="icon">📜</span> Script
+                            </button>
+                            <button id="btnNew" class="btn secondary" title="New Circuit">
+                                <span class="icon">📄</span> New
+                            </button>
+                            <button id="btnSave" class="btn secondary" title="Save Circuit">
+                                <span class="icon">💾</span> Save
+                            </button>
+                            <button id="btnLoad" class="btn secondary" title="Load Circuit">
+                                <span class="icon">📂</span> Load
+                            </button>
+                            <button id="btnRunMode" class="btn secondary"
+                                title="Run Mode - Auto simulate on circuit change">
+                                <span class="icon">🔄</span> Run Mode
+                            </button>
+                            <button id="btnSingleShot" class="btn primary" title="Single Shot Simulation">
+                                <span class="icon">▶</span> Single Shot
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Floating Frequency Settings -->
+                    <div class="frequency-settings">
+                        <label>Start:</label>
+                        <input type="number" id="freqStart" value="1" min="0.001" step="0.1">
+                        <select id="freqStartUnit">
+                            <option value="1e3">kHz</option>
+                            <option value="1e6" selected>MHz</option>
+                            <option value="1e9">GHz</option>
+                        </select>
+                        <label>End:</label>
+                        <input type="number" id="freqEnd" value="100" min="0.001" step="0.1">
+                        <select id="freqEndUnit">
+                            <option value="1e3">kHz</option>
+                            <option value="1e6" selected>MHz</option>
+                            <option value="1e9">GHz</option>
+                        </select>
+                        <label>Points:</label>
+                        <input type="number" id="freqPoints" value="1001" min="10" max="10001" step="10">
+                    </div>
+                    <div class="canvas-wrapper" id="canvasWrapper">
+                        <svg id="circuitCanvas" class="circuit-canvas">
+                            <defs>
+                                <pattern id="gridPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+                                    <circle cx="0" cy="0"
+                                        style="r: var(--grid-minor-size); opacity: var(--grid-minor-opacity); fill: var(--grid-dot-color);" />
+                                </pattern>
+                                <pattern id="gridPatternLarge" width="100" height="100" patternUnits="userSpaceOnUse">
+                                    <rect width="100" height="100" fill="url(#gridPattern)" />
+                                    <circle cx="0" cy="0"
+                                        style="r: var(--grid-major-size); opacity: var(--grid-major-opacity); fill: var(--grid-major-color);" />
+                                    <circle cx="100" cy="0"
+                                        style="r: var(--grid-major-size); opacity: var(--grid-major-opacity); fill: var(--grid-major-color);" />
+                                    <circle cx="0" cy="100"
+                                        style="r: var(--grid-major-size); opacity: var(--grid-major-opacity); fill: var(--grid-major-color);" />
+                                    <circle cx="100" cy="100"
+                                        style="r: var(--grid-major-size); opacity: var(--grid-major-opacity); fill: var(--grid-major-color);" />
+                                </pattern>
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5"
+                                    orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#ff00ff" />
+                                </marker>
+                            </defs>
+                            <rect class="grid-background" width="100%" height="100%" fill="url(#gridPatternLarge)" />
+                            <g id="wiresLayer"></g>
+                            <g id="componentsLayer"></g>
+                            <g id="drawingsLayer"></g>
+                            <g id="overlayLayer"></g>
+                        </svg>
+                    </div>
+                    <div class="canvas-info">
+                        <span id="zoomLevel">100%</span>
+                        <span id="cursorPos">X: 0, Y: 0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Graph Panel (Right Sidebar) -->
+            <aside class="sidebar right-sidebar graph-sidebar" id="graphSidebar">
+                <div class="resize-handle" id="resizeHandle"></div>
+                <div class="panel graph-panel">
+                    <div class="graph-header">
+                        <h2 class="panel-title" id="graphTitle">S11 Log Mag vs Frequency</h2>
+                        <div class="graph-controls">
+                            <button id="btnSaveGraphData" class="graph-btn" title="Save Graph Data (CSV)">
+                                <span class="icon">💾</span> Save
+                            </button>
+                            <button id="btnLoadGraphData" class="graph-btn" title="Load CSV Data">
+                                <span class="icon">📂</span> Load
+                            </button>
+                            <button id="btnResetZoom" class="graph-btn" title="Reset Zoom (Double-click)">
+                                <span class="icon">🔍</span> Reset
+                            </button>
+                            <button id="btnGraphSettings" class="graph-btn" title="Graph Settings">
+                                <span class="icon">⚙️</span>
+                            </button>
+                            <button id="btnFloatGraph" class="graph-btn" title="Float Window">
+                                <span class="icon">❐</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="graph-container" id="graphContainer">
+                        <canvas id="s11Graph"></canvas>
+                        <canvas id="graphDrawOverlay"
+                            style="position: absolute; top: 0; left: 0; pointer-events: none; width: 100%; height: 100%;"></canvas>
+
+                    </div>
+                    <div class="graph-hint">
+                        <span>🖱️ Scroll: Zoom | Drag: Pan | Double-click: Reset</span>
+                    </div>
+                </div>
+                <div class="marker-table-container" id="markerTableContainer" style="display: none;">
+                    <table class="marker-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>ID</th>
+                                <th>X / R</th>
+                                <th>Value</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="markerTableBody">
+                            <!-- Marker Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Context Menu -->
+    <ul id="graphContextMenu" class="context-menu" style="display: none;">
+        <!-- Dynamic Menu Items -->
+    </ul>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip" style="display: none;"></div>
+
+    <!-- Graph Settings Modal -->
+    <div id="graphSettingsModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Graph Settings</h3>
+                <button class="modal-close" id="btnCloseModal">&times;</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="measurement">Measurement</button>
+                <button class="settings-tab" data-tab="display">Display</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Measurement Tab Content -->
+                <div id="tabMeasurement" class="settings-tab-content active">
+                    <!-- Meas Section -->
+                    <div class="settings-section">
+                        <h4>Meas</h4>
+                        <p class="settings-description">Select the measurement parameter</p>
+                        <select id="measSelect" class="settings-select">
+                            <option value="S11" selected>S11</option>
+                            <option value="S21">S21</option>
+                            <option value="S12">S12</option>
+                            <option value="S22">S22</option>
+                            <option value="impedance">Impedance</option>
+                            <option value="matchingRange">Matching Range</option>
+                        </select>
+                    </div>
+                    <!-- Matching Range Options (hidden by default) -->
+                    <div class="settings-section matching-range-options" id="matchingRangeOptions"
+                        style="display: none;">
+                        <h4>Matching Range Options</h4>
+                        <div class="matching-range-controls">
+                            <!-- Frequency Selection -->
+                            <div class="frequency-select-section" style="margin-bottom: 12px;">
+                                <p class="settings-description">Select frequency for matching range:</p>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <input type="number" id="matchingRangeFreq" class="settings-input" value="50"
+                                        min="0.001" step="0.1" style="width: 100px;">
+                                    <select id="matchingRangeFreqUnit" class="settings-select" style="width: 80px;">
+                                        <option value="1e3">kHz</option>
+                                        <option value="1e6" selected>MHz</option>
+                                        <option value="1e9">GHz</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Points per Edge -->
+                            <div class="points-select-section" style="margin-bottom: 12px;">
+                                <p class="settings-description">Points per edge (smoothness):</p>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <input type="number" id="matchingRangePoints" class="settings-input" value="20"
+                                        min="2" max="1000" step="1" style="width: 80px;">
+                                    <span style="color: var(--text-muted); font-size: 12px;">points</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <input type="checkbox" id="invertReactance">
+                                <label for="invertReactance">Invert Reactance (Matching Range Mode)</label>
+                            </div>
+                            <div class="component-select-section">
+                                <p class="settings-description">Select components to sweep:</p>
+                                <div id="componentCheckboxes" class="component-checkboxes">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Format Section -->
+                    <div class="settings-section">
+                        <h4>Format</h4>
+                        <p class="settings-description">Select the display format for the graph</p>
+                        <select id="formatSelect" class="settings-select">
+                            <option value="logMag" selected>Log Mag</option>
+                            <option value="linMag">Lin Mag</option>
+                            <option value="linRabsX">Lin R, X</option>
+                            <option value="phase">Phase</option>
+                            <option value="delay">Delay</option>
+                            <option value="smith">Smith</option>
+                            <option value="polar">Polar</option>
+                            <option value="swr">SWR</option>
+                        </select>
+                    </div>
+                    <!-- Lin R, X Options (hidden by default) -->
+                    <div class="settings-section lin-rx-options" id="linRXOptions" style="display: none;">
+                        <h4>Lin R, X Options</h4>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                            <input type="checkbox" id="linRXAbsolute" checked>
+                            <label for="linRXAbsolute">Absolute Imaginary (|X|)</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                            <input type="checkbox" id="linRXHighlightNegative">
+                            <label for="linRXHighlightNegative">Highlight Negative Imag (Red)</label>
+                        </div>
+                    </div>
+                    <!-- X-Axis Scale Section -->
+                    <div class="settings-section">
+                        <h4>X-Axis Scale</h4>
+                        <p class="settings-description">Select the frequency axis scale</p>
+                        <select id="xAxisSelect" class="settings-select">
+                            <option value="linear" selected>Linear</option>
+                            <option value="logarithmic">Logarithmic</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Display Tab Content -->
+                <div id="tabDisplay" class="settings-tab-content">
+                    <!-- Animation Section -->
+                    <div class="settings-section">
+                        <h4>Animation</h4>
+                        <p class="settings-description">Enable/disable graph animation</p>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="animationToggle">
+                            <label for="animationToggle">Enable Animation</label>
+                        </div>
+                    </div>
+                    <!-- Marker Value Section -->
+                    <div class="settings-section">
+                        <h4>Marker</h4>
+                        <p class="settings-description">Display options for markers</p>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="showMarkerValueGlobal">
+                            <label for="showMarkerValueGlobal">Show Marker Value</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnApplySettings" class="btn primary">Apply</button>
+                <button id="btnCancelSettings" class="btn secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Component Parameter Modal -->
+    <div id="componentModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content component-modal">
+            <div class="modal-header">
+                <h3 id="componentModalTitle">Component Settings</h3>
+                <button class="modal-close" id="btnCloseComponentModal">&times;</button>
+            </div>
+            <div class="modal-body" id="componentModalBody">
+                <!-- Dynamic parameter content will be inserted here -->
+            </div>
+            <div class="modal-footer">
+                <button id="btnCancelComponent" class="btn secondary">Cancel</button>
+                <button id="btnApplyComponent" class="btn primary">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Modal -->
+    <div id="scriptModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content script-modal">
+            <div class="modal-header">
+                <h3>Script Editor</h3>
+                <button class="modal-close" id="btnCloseScriptModal">&times;</button>
+            </div>
+
+            <div class="script-tabs">
+                <button class="script-tab active" data-tab="circuit">Circuit Script</button>
+                <button class="script-tab" data-tab="graph">Graph Script</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="script-content-container">
+                    <!-- Circuit Script Panel -->
+                    <div id="scriptPanelCircuit" class="script-panel active">
+                        <textarea id="circuitScriptEditor" class="script-editor"
+                            placeholder="Paste circuit JSON here..."></textarea>
+                    </div>
+
+                    <!-- Graph Script Panel -->
+                    <div id="scriptPanelGraph" class="script-panel">
+                        <textarea id="graphScriptEditor" class="script-editor"
+                            placeholder="Paste graph CSV data here..."></textarea>
+                        <div class="graph-sub-tabs" id="graphSubTabs">
+                            <!-- Graph tabs will be generated dynamically -->
+                            <button class="graph-add-tab" id="btnAddGraphTab">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button id="btnCancelScript" class="btn secondary">Cancel</button>
+                <button id="btnApplyScript" class="btn primary">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Global Settings</h3>
+                <button class="modal-close" id="btnCloseSettingsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-menu">
+                    <button id="btnOpenShortcuts" class="btn primary full-width">Modify Shortcuts</button>
+
+                    <!-- Wheel Sensitivity Setting -->
+                    <div class="settings-group" style="margin-top: 20px;">
+                        <label for="wheelSensitivity" class="settings-label">Mouse Wheel Sensitivity</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="wheelSensitivity" min="1" max="50" value="10" step="1"
+                                style="flex: 1;">
+                            <span id="wheelSensitivityValue" style="min-width: 40px; text-align: right;">1.0%</span>
+                        </div>
+                        <p class="settings-description"
+                            style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
+                            Adjusts the slider movement speed when scrolling with the mouse wheel (0.1% - 5.0% per
+                            step).
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnCloseSettings" class="btn secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcut Modal -->
+    <div id="shortcutModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content shortcut-modal" style="min-width: 600px;">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button class="modal-close" id="btnCloseShortcutModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcut-actions" style="margin-bottom: 15px; display: flex; gap: 10px;">
+                    <button id="btnExportShortcuts" class="btn secondary" title="Download shortcuts as JSON">
+                        <span class="icon">⬇️</span> Export
+                    </button>
+                    <button id="btnImportShortcuts" class="btn secondary" title="Load shortcuts from JSON">
+                        <span class="icon">⬆️</span> Import
+                    </button>
+                    <input type="file" id="fileImportShortcuts" accept=".json" style="display: none;">
+                    <button id="btnResetShortcuts" class="btn warning" style="margin-left: auto;">Reset to
+                        Defaults</button>
+                </div>
+                <div class="shortcut-list-container"
+                    style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
+                    <table class="shortcut-table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
+                                <th style="padding: 8px;">Action</th>
+                                <th style="padding: 8px;">Shortcut</th>
+                                <th style="padding: 8px;">Edit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shortcutListBody">
+                            <!-- Dynamic Content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnCloseShortcut" class="btn secondary">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paint Color Menu (Context Menu) -->
+    <div id="paintColorMenu" class="color-menu" style="display: none;">
+        <div class="color-options">
+            <button class="color-btn" data-color="#ff0000" title="Red" style="background-color: #ff0000;"></button>
+            <button class="color-btn" data-color="#0000ff" title="Blue" style="background-color: #0000ff;"></button>
+            <button class="color-btn" data-color="#ffffff" title="White"
+                style="background-color: #ffffff; border: 1px solid #ccc;"></button>
+            <div class="color-picker-wrapper" title="Custom Color">
+                <input type="color" id="paintColorPicker" value="#ff00ff">
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Core -->
+    <script src="js/core/Component.js"></script>
+    <script src="js/core/Circuit.js"></script>
+    <!-- Components -->
+    <script src="js/components/Resistor.js"></script>
+    <script src="js/components/Inductor.js"></script>
+    <script src="js/components/Capacitor.js"></script>
+    <script src="js/components/Ground.js"></script>
+    <script src="js/components/TransmissionLine.js"></script>
+    <script src="js/components/Port.js"></script>
+    <!-- Editor -->
+    <script src="js/editor/CanvasManager.js"></script>
+    <script src="js/editor/DragDropHandler.js"></script>
+    <script src="js/editor/WireManager.js"></script>
+    <!-- Simulation -->
+    <script src="js/simulation/ComplexMath.js"></script>
+    <script src="js/simulation/NetworkAnalyzer.js"></script>
+    <script src="js/simulation/Calculator.js"></script>
+    <!-- UI -->
+    <script src="js/ui/Toolbar.js"></script>
+
+    <script src="js/ui/PropertyPanel.js"></script>
+    <script src="js/ui/CSVParser.js"></script>
+    <script src="js/ui/MarkerManager.js"></script>
+    <script src="js/ui/SParameterGraph.js"></script>
+    <script src="js/ui/SmithChartRenderer.js"></script>
+    <script src="js/ui/ResizeHandler.js"></script>
+    <script src="js/ui/ComponentModal.js"></script>
+    <script src="js/ui/InlineSlider.js"></script>
+    <script src="js/ui/ValueEditor.js"></script>
+    <script src="js/ui/ScriptModal.js"></script>
+    <!-- Managers -->
+    <script src="js/ui/NotificationManager.js"></script>
+
+    <script src="js/ui/ShortcutHandler.js"></script>
+    <script src="js/ui/SettingsModal.js"></script>
+    <script src="js/ui/ShortcutModal.js"></script>
+    <script src="js/managers/DrawingManager.js"></script>
+    <script src="js/managers/SimulationController.js"></script>
+    <script src="js/managers/GraphController.js"></script>
+    <!-- Main -->
+    <script src="js/main.js"></script>
+</body>
+
+</html>

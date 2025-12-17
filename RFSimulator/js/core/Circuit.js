@@ -1,0 +1,805 @@
+/**
+ * Circuit Class
+ * Manages all components and wires in the circuit
+ */
+class Circuit {
+    constructor() {
+        this.components = new Map();
+        this.wires = new Map();
+        this.nodes = new Map();
+        this.selectedItems = new Set();
+        this.history = []; // Legacy support (points to circuitHistory)
+        this.circuitHistory = [];
+        this.paintHistory = [];
+        this.circuitHistoryIndex = -1;
+        this.paintHistoryIndex = -1;
+        this.maxHistory = 50;
+
+        // Event callbacks
+        this.onChange = null;
+        this.onSelect = null;
+    }
+
+    /**
+     * Add component to circuit
+     */
+    addComponent(component) {
+        this.components.set(component.id, component);
+        this.saveHistory('add', { component: component.toJSON() });
+        this.notifyChange();
+        return component;
+    }
+
+    /**
+     * Remove component from circuit
+     */
+    removeComponent(id) {
+        const component = this.components.get(id);
+        if (!component) return false;
+
+        // Remove connected wires
+        const connectedWires = this.getWiresConnectedTo(id);
+        connectedWires.forEach(wire => this.removeWire(wire.id));
+
+        // Remove from selection
+        this.selectedItems.delete(id);
+
+        this.saveHistory('remove', { component: component.toJSON() });
+        this.components.delete(id);
+
+        this.updateSpatialConnections(); // Update visuals immediately
+        this.notifyChange();
+        return true;
+    }
+
+    /**
+     * Get component by ID
+     */
+    getComponent(id) {
+        return this.components.get(id);
+    }
+
+    /**
+     * Get all components
+     */
+    getAllComponents() {
+        return Array.from(this.components.values());
+    }
+
+    /**
+     * Add wire to circuit
+     */
+    addWire(wire) {
+        this.wires.set(wire.id, wire);
+        this.saveHistory('addWire', { wire: wire.toJSON() });
+        this.notifyChange();
+        return wire;
+    }
+
+    /**
+     * Remove wire from circuit
+     */
+    removeWire(id) {
+        const wire = this.wires.get(id);
+        if (!wire) return false;
+
+        // Disconnect from components
+        if (wire.startComponent) {
+            const comp = this.components.get(wire.startComponent);
+            if (comp && comp.connections[wire.startTerminal] === id) {
+                const otherWire = this.findOtherWireConnectedTo(wire.startComponent, wire.startTerminal, id);
+                comp.connections[wire.startTerminal] = otherWire ? otherWire.id : null;
+            }
+        }
+        if (wire.endComponent) {
+            const comp = this.components.get(wire.endComponent);
+            if (comp && comp.connections[wire.endTerminal] === id) {
+                const otherWire = this.findOtherWireConnectedTo(wire.endComponent, wire.endTerminal, id);
+                comp.connections[wire.endTerminal] = otherWire ? otherWire.id : null;
+            }
+        }
+
+        this.selectedItems.delete(id);
+        this.saveHistory('removeWire', { wire: wire.toJSON() });
+        this.wires.delete(id);
+        this.notifyChange();
+        return true;
+    }
+
+    /**
+     * Get wire by ID
+     */
+    getWire(id) {
+        return this.wires.get(id);
+    }
+
+    /**
+     * Get all wires
+     */
+    getAllWires() {
+        return Array.from(this.wires.values());
+    }
+
+    /**
+     * Get wires connected to a component
+     */
+    getWiresConnectedTo(componentId) {
+        return this.getAllWires().filter(wire =>
+            wire.startComponent === componentId || wire.endComponent === componentId
+        );
+    }
+
+    /**
+     * Select item(s)
+     */
+    select(ids, addToSelection = false) {
+        if (!addToSelection) {
+            this.clearSelection();
+        }
+
+        const idArray = Array.isArray(ids) ? ids : [ids];
+        idArray.forEach(id => {
+            this.selectedItems.add(id);
+
+            const component = this.components.get(id);
+            if (component) {
+                component.setSelected(true);
+            }
+
+            const wire = this.wires.get(id);
+            if (wire) {
+                wire.setSelected(true);
+            }
+        });
+
+        this.notifySelect();
+    }
+
+    /**
+     * Clear selection
+     */
+    clearSelection() {
+        this.selectedItems.forEach(id => {
+            const component = this.components.get(id);
+            if (component) {
+                component.setSelected(false);
+            }
+
+            const wire = this.wires.get(id);
+            if (wire) {
+                wire.setSelected(false);
+            }
+        });
+        this.selectedItems.clear();
+        this.notifySelect();
+    }
+
+    /**
+     * Get selected items
+     */
+    getSelectedItems() {
+        return Array.from(this.selectedItems);
+    }
+
+    /**
+     * Get selected components
+     */
+    getSelectedComponents() {
+        return this.getSelectedItems()
+            .map(id => this.components.get(id))
+            .filter(c => c !== undefined);
+    }
+
+    /**
+     * Get selected wires
+     */
+    getSelectedWires() {
+        return this.getSelectedItems()
+            .map(id => this.wires.get(id))
+            .filter(w => w !== undefined);
+    }
+
+    /**
+     * Delete selected items
+     */
+    deleteSelected() {
+        const selected = this.getSelectedItems();
+        selected.forEach(id => {
+            if (this.components.has(id)) {
+                this.removeComponent(id);
+            } else if (this.wires.has(id)) {
+                this.removeWire(id);
+            }
+        });
+    }
+
+    /**
+     * Find component at position
+     */
+    findComponentAt(x, y) {
+        for (const component of this.components.values()) {
+            if (component.containsPoint(x, y)) {
+                return component;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find terminal near position
+     */
+    findTerminalNear(x, y, maxDistance = 15) {
+        let nearest = null;
+        let minDist = maxDistance;
+
+        for (const component of this.components.values()) {
+            const terminal = component.getNearestTerminal(x, y, maxDistance);
+            if (terminal && terminal.distance < minDist) {
+                minDist = terminal.distance;
+                nearest = {
+                    componentId: component.id,
+                    terminal: terminal.terminal,
+                    x: terminal.x,
+                    y: terminal.y
+                };
+            }
+        }
+
+        return nearest;
+    }
+
+    /**
+     * Find wire at position
+     */
+    findWireAt(x, y, tolerance = 5) {
+        for (const wire of this.wires.values()) {
+            if (wire.containsPoint(x, y, tolerance)) {
+                return wire;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Save state to history
+     * @param {string} action 
+     * @param {object} data 
+     * @param {boolean} isPaintEvent - If true, saves to paint history stack
+     */
+    saveHistory(action, data, isPaintEvent = false) {
+        const targetHistory = isPaintEvent ? this.paintHistory : this.circuitHistory;
+        let targetIndex = isPaintEvent ? this.paintHistoryIndex : this.circuitHistoryIndex;
+
+        // Remove future states if we're not at the end
+        if (targetIndex < targetHistory.length - 1) {
+            targetHistory.splice(targetIndex + 1);
+        }
+
+        targetHistory.push({ action, data, timestamp: Date.now() });
+
+        // Limit history size
+        if (targetHistory.length > this.maxHistory) {
+            targetHistory.shift();
+        } else {
+            targetIndex++;
+        }
+
+        // Update index
+        if (isPaintEvent) {
+            this.paintHistoryIndex = targetIndex;
+            // Sync legacy pointer just in case, though we rely on split stacks now
+            this.paintHistory = targetHistory;
+        } else {
+            this.circuitHistoryIndex = targetIndex;
+            this.circuitHistory = targetHistory;
+        }
+
+        console.log(`History Saved (${isPaintEvent ? 'Paint' : 'Circuit'}):`, action, targetIndex);
+    }
+
+    /**
+     * Undo last action
+     */
+    undo() {
+        // Determine which stack to use based on Paint Mode
+        const isPaintMode = window.drawingManager && window.drawingManager.activeTool;
+        let index = isPaintMode ? this.paintHistoryIndex : this.circuitHistoryIndex;
+        const stack = isPaintMode ? this.paintHistory : this.circuitHistory;
+
+        if (index < 0) return false;
+
+        const state = stack[index];
+        index--;
+
+        if (isPaintMode) {
+            this.paintHistoryIndex = index;
+        } else {
+            this.circuitHistoryIndex = index;
+        }
+
+        // Reverse the action
+        switch (state.action) {
+            // Circuit Actions
+            case 'add':
+                this.components.delete(state.data.component.id);
+                this.notifyChange();
+                break;
+            case 'remove':
+                const CompClass = this.getComponentClass(state.data.component.type);
+                if (CompClass) {
+                    const comp = CompClass.fromJSON(state.data.component);
+                    this.components.set(comp.id, comp);
+                }
+                this.notifyChange();
+                break;
+            case 'addWire':
+                const wireToRemove = this.wires.get(state.data.wire.id);
+                if (wireToRemove) {
+                    this.disconnectWireFromComponents(wireToRemove);
+                    this.wires.delete(wireToRemove.id);
+                }
+                this.notifyChange();
+                break;
+            case 'removeWire':
+                const wire = Wire.fromJSON(state.data.wire);
+                this.wires.set(wire.id, wire);
+                this.restoreWireConnections(wire);
+                this.notifyChange();
+                break;
+            case 'move':
+                state.data.items.forEach(item => {
+                    const el = item.type === 'component' ? this.components.get(item.id) : this.wires.get(item.id);
+                    if (el) {
+                        // Undo: Move BACK by negating dx, dy
+                        el.moveBy(-item.dx, -item.dy);
+                        if (item.type === 'wire') {
+                            this.checkWireDisconnection(el);
+                            this.autoConnectWire(el);
+                        }
+                    }
+                });
+                this.updateSpatialConnections();
+                this.notifyChange();
+                break;
+            case 'wire_edit':
+                const targetWireUndo = this.wires.get(state.data.id);
+                if (targetWireUndo) {
+                    this.disconnectWireFromComponents(targetWireUndo);
+                    const prev = state.data.previous;
+                    targetWireUndo.startX = prev.startX;
+                    targetWireUndo.startY = prev.startY;
+                    targetWireUndo.endX = prev.endX;
+                    targetWireUndo.endY = prev.endY;
+                    targetWireUndo.startComponent = prev.startComponent;
+                    targetWireUndo.startTerminal = prev.startTerminal;
+                    targetWireUndo.endComponent = prev.endComponent;
+                    targetWireUndo.endTerminal = prev.endTerminal;
+
+                    this.restoreWireConnections(targetWireUndo);
+                    targetWireUndo.render();
+                }
+                this.notifyChange();
+                break;
+            case 'property_change':
+                const compUndo = this.components.get(state.data.id);
+                if (compUndo) {
+                    Object.assign(compUndo, state.data.previous);
+                    if (compUndo.updateLabel) compUndo.updateLabel();
+                }
+                this.notifyChange();
+                break;
+
+            // Paint Actions
+            case 'paint_circuit_add':
+                if (window.drawingManager) window.drawingManager.removeCircuitShape(state.data.id);
+                break;
+            case 'paint_graph_add':
+                if (window.drawingManager) window.drawingManager.removeGraphShape(state.data.id);
+                break;
+            case 'paint_clear':
+                if (window.drawingManager) window.drawingManager.restoreSnapshot(state.data.snapshot);
+                break;
+        }
+
+        return true;
+    }
+
+    /**
+     * Redo undone action
+     */
+    redo() {
+        // Determine which stack to use based on Paint Mode
+        const isPaintMode = window.drawingManager && window.drawingManager.activeTool;
+        let index = isPaintMode ? this.paintHistoryIndex : this.circuitHistoryIndex;
+        const stack = isPaintMode ? this.paintHistory : this.circuitHistory;
+
+        if (index >= stack.length - 1) return false;
+
+        index++;
+        if (isPaintMode) {
+            this.paintHistoryIndex = index;
+        } else {
+            this.circuitHistoryIndex = index;
+        }
+
+        const state = stack[index];
+
+        // Re-apply the action
+        switch (state.action) {
+            // Circuit Actions
+            case 'add':
+                const CompClass = this.getComponentClass(state.data.component.type);
+                if (CompClass) {
+                    const comp = CompClass.fromJSON(state.data.component);
+                    this.components.set(comp.id, comp);
+                }
+                this.notifyChange();
+                break;
+            case 'remove':
+                this.components.delete(state.data.component.id);
+                this.notifyChange();
+                break;
+            case 'addWire':
+                const wire = Wire.fromJSON(state.data.wire);
+                this.wires.set(wire.id, wire);
+                this.restoreWireConnections(wire);
+                this.notifyChange();
+                break;
+            case 'removeWire':
+                const wireRedoRemove = this.wires.get(state.data.wire.id);
+                if (wireRedoRemove) {
+                    this.disconnectWireFromComponents(wireRedoRemove);
+                    this.wires.delete(wireRedoRemove.id);
+                }
+                this.notifyChange();
+                break;
+            case 'move':
+                state.data.items.forEach(item => {
+                    const el = item.type === 'component' ? this.components.get(item.id) : this.wires.get(item.id);
+                    if (el) {
+                        el.moveBy(item.dx, item.dy);
+                        if (item.type === 'wire') {
+                            this.checkWireDisconnection(el);
+                            this.autoConnectWire(el);
+                        }
+                    }
+                });
+                this.updateSpatialConnections();
+                this.notifyChange();
+                break;
+            case 'wire_edit':
+                const targetWireRedo = this.wires.get(state.data.id);
+                if (targetWireRedo) {
+                    this.disconnectWireFromComponents(targetWireRedo);
+                    const curr = state.data.current;
+                    targetWireRedo.startX = curr.startX;
+                    targetWireRedo.startY = curr.startY;
+                    targetWireRedo.endX = curr.endX;
+                    targetWireRedo.endY = curr.endY;
+                    targetWireRedo.startComponent = curr.startComponent;
+                    targetWireRedo.startTerminal = curr.startTerminal;
+                    targetWireRedo.endComponent = curr.endComponent;
+                    targetWireRedo.endTerminal = curr.endTerminal;
+
+                    this.restoreWireConnections(targetWireRedo);
+                    targetWireRedo.render();
+                }
+                this.notifyChange();
+                break;
+            case 'property_change':
+                const compRedo = this.components.get(state.data.id);
+                if (compRedo) {
+                    Object.assign(compRedo, state.data.current);
+                    if (compRedo.updateLabel) compRedo.updateLabel();
+                }
+                this.notifyChange();
+                break;
+
+            // Paint Actions
+            case 'paint_circuit_add':
+                if (window.drawingManager) window.drawingManager.addCircuitShape(state.data);
+                break;
+            case 'paint_graph_add':
+                if (window.drawingManager) window.drawingManager.addGraphShape(state.data);
+                break;
+            case 'paint_clear':
+                if (window.drawingManager) window.drawingManager.clearAll(false); // false = don't save history again
+                break;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get component class by type
+     */
+    getComponentClass(type) {
+        const classes = {
+            'R': window.Resistor,
+            'L': window.Inductor,
+            'C': window.Capacitor,
+            'GND': window.Ground,
+            'TL': window.TransmissionLine,
+            'PORT': window.Port
+        };
+        return classes[type];
+    }
+
+    /**
+     * Notify change callback
+     */
+    notifyChange() {
+        if (this.onChange) {
+            this.onChange(this);
+        }
+    }
+
+    /**
+     * Notify selection callback
+     */
+    notifySelect() {
+        if (this.onSelect) {
+            this.onSelect(this.getSelectedItems());
+        }
+    }
+
+    /**
+     * Clear circuit
+     */
+    clear() {
+        this.components.clear();
+        this.wires.clear();
+        this.nodes.clear();
+        this.selectedItems.clear();
+        this.history = [];
+        this.historyIndex = -1;
+        Component.idCounter = 0;
+        this.notifyChange();
+    }
+
+    /**
+     * Export circuit to JSON
+     */
+    toJSON() {
+        return {
+            version: '1.0',
+            components: this.getAllComponents().map(c => c.toJSON()),
+            wires: this.getAllWires().map(w => w.toJSON())
+        };
+    }
+
+    /**
+     * Import circuit from JSON
+     */
+    fromJSON(data) {
+        this.clear();
+
+        if (data.components) {
+            data.components.forEach(compData => {
+                const CompClass = this.getComponentClass(compData.type);
+                if (CompClass) {
+                    const component = CompClass.fromJSON(compData);
+                    this.components.set(component.id, component);
+
+                    // Update ID counter
+                    const idNum = parseInt(component.id.split('_')[1]);
+                    if (idNum > Component.idCounter) {
+                        Component.idCounter = idNum;
+                    }
+                }
+            });
+        }
+
+        if (data.wires) {
+            data.wires.forEach(wireData => {
+                const wire = Wire.fromJSON(wireData);
+                this.wires.set(wire.id, wire);
+            });
+        }
+
+        this.updateSpatialConnections(); // Update visuals
+        this.notifyChange();
+    }
+
+    /**
+     * Find another wire connected to the same component terminal
+     */
+    findOtherWireConnectedTo(componentId, terminal, excludeWireId) {
+        for (const wire of this.wires.values()) {
+            if (wire.id === excludeWireId) continue;
+
+            if ((wire.startComponent === componentId && wire.startTerminal === terminal) ||
+                (wire.endComponent === componentId && wire.endTerminal === terminal)) {
+                return wire;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Update spatial connections for visual feedback
+     * Checks if component terminals are overlapping and updates directConnections state
+     */
+    updateSpatialConnections() {
+        const components = this.getAllComponents();
+        const tolerance = 5;
+
+        // Reset all direct connections first
+        components.forEach(comp => {
+            if (!comp.directConnections) comp.directConnections = {};
+            Object.keys(comp.terminals).forEach(key => {
+                comp.directConnections[key] = false;
+            });
+        });
+
+        // Check for overlaps (O(N^2))
+        for (let i = 0; i < components.length; i++) {
+            for (let j = i + 1; j < components.length; j++) {
+                const c1 = components[i];
+                const c2 = components[j];
+
+                for (const t1 of Object.keys(c1.terminals)) {
+                    const p1 = c1.getTerminalPosition(t1);
+
+                    for (const t2 of Object.keys(c2.terminals)) {
+                        const p2 = c2.getTerminalPosition(t2);
+
+                        const distSq = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
+                        if (distSq < tolerance * tolerance) {
+                            c1.directConnections[t1] = true;
+                            c2.directConnections[t2] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Get circuit statistics
+     */
+    getStats() {
+        const components = this.getAllComponents();
+        return {
+            totalComponents: components.length,
+            totalWires: this.wires.size,
+            resistors: components.filter(c => c.type === 'R').length,
+            inductors: components.filter(c => c.type === 'L').length,
+            capacitors: components.filter(c => c.type === 'C').length,
+            grounds: components.filter(c => c.type === 'GND').length,
+            transmissionLines: components.filter(c => c.type === 'TL').length,
+            ports: components.filter(c => c.type === 'PORT').length
+        };
+    }
+    /**
+     * Helper to restore wire connections to components
+     */
+    restoreWireConnections(wire) {
+        // Clear old connections first? No, we trust the state object to have correct IDs
+        // But we need to make sure the components know about this wire.
+
+        if (wire.startComponent) {
+            const comp = this.components.get(wire.startComponent);
+            if (comp) comp.connections[wire.startTerminal] = wire.id;
+        }
+        if (wire.endComponent) {
+            const comp = this.components.get(wire.endComponent);
+            if (comp) comp.connections[wire.endTerminal] = wire.id;
+        }
+    }
+
+    /**
+     * Helper to disconnect wire from components
+     */
+    disconnectWireFromComponents(wire) {
+        if (wire.startComponent) {
+            const comp = this.components.get(wire.startComponent);
+            if (comp && comp.connections[wire.startTerminal] === wire.id) {
+                // Check if there is another valid wire? 
+                const otherWire = this.findOtherWireConnectedTo(wire.startComponent, wire.startTerminal, wire.id);
+                comp.connections[wire.startTerminal] = otherWire ? otherWire.id : null;
+            }
+        }
+        if (wire.endComponent) {
+            const comp = this.components.get(wire.endComponent);
+            if (comp && comp.connections[wire.endTerminal] === wire.id) {
+                const otherWire = this.findOtherWireConnectedTo(wire.endComponent, wire.endTerminal, wire.id);
+                comp.connections[wire.endTerminal] = otherWire ? otherWire.id : null;
+            }
+        }
+    }
+
+    /**
+     * Check if wire should be disconnected from components
+     */
+    checkWireDisconnection(wire) {
+        const threshold = 10;
+
+        // Check start connection
+        if (wire.startComponent) {
+            const comp = this.components.get(wire.startComponent);
+            if (comp) {
+                const terminalPos = comp.getTerminalPosition(wire.startTerminal);
+                const dist = Math.sqrt(
+                    (wire.startX - terminalPos.x) ** 2 +
+                    (wire.startY - terminalPos.y) ** 2
+                );
+
+                if (dist > threshold) {
+                    if (comp.connections[wire.startTerminal] === wire.id) {
+                        comp.connections[wire.startTerminal] = null;
+                    }
+                    wire.startComponent = null;
+                    wire.startTerminal = null;
+                }
+            }
+        }
+
+        // Check end connection
+        if (wire.endComponent) {
+            const comp = this.components.get(wire.endComponent);
+            if (comp) {
+                const terminalPos = comp.getTerminalPosition(wire.endTerminal);
+                const dist = Math.sqrt(
+                    (wire.endX - terminalPos.x) ** 2 +
+                    (wire.endY - terminalPos.y) ** 2
+                );
+
+                if (dist > threshold) {
+                    if (comp.connections[wire.endTerminal] === wire.id) {
+                        comp.connections[wire.endTerminal] = null;
+                    }
+                    wire.endComponent = null;
+                    wire.endTerminal = null;
+                }
+            }
+        }
+    }
+
+    /**
+     * Auto-connect wire terminals to nearby components
+     */
+    autoConnectWire(wire) {
+        const tolerance = 10;
+
+        // Start Endpoint
+        if (!wire.startComponent) {
+            const startTerm = this.findTerminalNear(wire.startX, wire.startY, tolerance);
+            if (startTerm) {
+                wire.startComponent = startTerm.componentId;
+                wire.startTerminal = startTerm.terminal;
+                wire.startX = startTerm.x;
+                wire.startY = startTerm.y;
+
+                const comp = this.components.get(startTerm.componentId);
+                if (comp) {
+                    comp.connections[startTerm.terminal] = wire.id;
+                }
+            }
+        }
+
+        // End Endpoint
+        if (!wire.endComponent) {
+            const endTerm = this.findTerminalNear(wire.endX, wire.endY, tolerance);
+            if (endTerm) {
+                wire.endComponent = endTerm.componentId;
+                wire.endTerminal = endTerm.terminal;
+                wire.endX = endTerm.x;
+                wire.endY = endTerm.y;
+
+                const comp = this.components.get(endTerm.componentId);
+                if (comp) {
+                    comp.connections[endTerm.terminal] = wire.id;
+                }
+            }
+        }
+
+        wire.render();
+    }
+}
+
+// Export for use in other modules
+window.Circuit = Circuit;
+
+
+

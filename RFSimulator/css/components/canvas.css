@@ -1,0 +1,232 @@
+/* ===== Circuit Canvas ===== */
+.circuit-canvas {
+    width: 100%;
+    height: 100%;
+    cursor: default;
+    background: var(--canvas-bg);
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+
+    /* Grid Control Variables */
+    --grid-minor-opacity: 1;
+    --grid-major-opacity: 1;
+    --grid-minor-size: 1px;
+    --grid-major-size: 1.5px;
+}
+
+.circuit-canvas.panning {
+    cursor: grabbing;
+}
+
+.circuit-canvas.wire-mode {
+    cursor: crosshair;
+}
+
+.grid-background {
+    pointer-events: none;
+}
+
+/* ===== Component Styles ===== */
+.circuit-component {
+    cursor: move;
+    transition: filter var(--transition-fast);
+}
+
+.circuit-component:hover {
+    filter: brightness(1.2);
+}
+
+.circuit-component.selected {
+    filter: drop-shadow(0 0 4px var(--selection-color));
+}
+
+.circuit-component.dragging {
+    opacity: 0.7;
+}
+
+/* Component specific colors */
+.circuit-component[data-type="R"] .component-body {
+    stroke: var(--component-resistor);
+}
+
+.circuit-component[data-type="L"] .component-body {
+    stroke: var(--component-inductor);
+}
+
+.circuit-component[data-type="C"] .component-body {
+    stroke: var(--component-capacitor);
+}
+
+.circuit-component[data-type="GND"] .component-body {
+    stroke: var(--component-ground);
+}
+
+.circuit-component[data-type="TL"] .component-body {
+    stroke: var(--component-tline);
+}
+
+.circuit-component[data-type="PORT"] .component-body {
+    stroke: var(--component-port);
+}
+
+/* Terminal points */
+.terminal {
+    fill: var(--text-primary);
+    stroke: var(--bg-primary);
+    stroke-width: 2;
+    cursor: crosshair;
+    transition: all var(--transition-fast);
+}
+
+.terminal:hover {
+    fill: var(--selection-color);
+    r: 6;
+}
+
+.terminal.connected {
+    fill: #4CAF50;
+    /* Green */
+    stroke: #2E7D32;
+}
+
+.terminal.highlight {
+    fill: var(--selection-color);
+    r: 8;
+    filter: drop-shadow(0 0 4px var(--selection-color));
+}
+
+/* Component labels */
+.component-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--text-secondary);
+    pointer-events: none;
+    user-select: none;
+}
+
+.component-value {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Prevent text selection on all component text elements */
+.circuit-component text {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* ===== Wire Styles ===== */
+.wire {
+    stroke: var(--component-wire);
+    stroke-width: 2;
+    fill: none;
+    cursor: default;
+    transition: stroke var(--transition-fast);
+}
+
+.wire:hover {
+    stroke: var(--selection-color);
+    stroke-width: 3;
+}
+
+.wire.selected {
+    stroke: var(--selection-color);
+    stroke-width: 3;
+    filter: drop-shadow(0 0 4px var(--selection-color));
+}
+
+.wire-preview {
+    stroke: var(--component-wire);
+    stroke-width: 2;
+    stroke-dasharray: 5, 5;
+    fill: none;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Wire junction (node) */
+.wire-junction {
+    fill: var(--component-wire);
+    stroke: var(--bg-primary);
+    stroke-width: 2;
+}
+
+/* ===== Selection Box ===== */
+.selection-box {
+    fill: var(--selection-bg);
+    stroke: var(--selection-color);
+    stroke-width: 1;
+    pointer-events: none;
+}
+
+.selection-box.crossing {
+    stroke: var(--accent-primary);
+    fill: rgba(35, 134, 54, 0.1);
+    stroke-dasharray: 4, 4;
+}
+
+/* ===== Ghost Element (Drag Preview) ===== */
+.ghost-component {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ===== Snap Indicator ===== */
+.snap-indicator {
+    fill: var(--selection-color);
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+/* ===== Zoom Controls ===== */
+.zoom-controls {
+    position: absolute;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    z-index: 10;
+}
+
+.zoom-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.zoom-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--selection-color);
+}
+
+/* ===== Matching Range Highlight ===== */
+.circuit-component.matching-highlight .component-body {
+    stroke: #f3ed92 !important;
+    /* User requested Purple */
+    color: #f3ed92 !important;
+    /* For currentColor elements */
+    filter: drop-shadow(0 0 5px #ffee00) !important;
+}
+
+.circuit-component.matching-highlight .component-body * {
+    stroke: #f3ed92 !important;
+    color: #ffee00 !important;
+}

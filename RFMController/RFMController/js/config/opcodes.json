@@ -1,0 +1,30 @@
+{
+  "opcodes": {
+    "ZI": {
+      "name": "Input Impedance",
+      "description": "Input sensor impedance measurement",
+      "fields": ["magnitude", "phase"],
+      "handler": "handleInputImpedance"
+    },
+    "ZO": {
+      "name": "Output Impedance",
+      "description": "Output sensor impedance measurement",
+      "fields": ["magnitude", "phase"],
+      "handler": "handleOutputImpedance"
+    },
+    "FT": {
+      "name": "FFT Data",
+      "description": "Fourier transform frequency domain data",
+      "fields": ["*array"],
+      "handler": "handleFftData"
+    },
+    "RT": {
+      "name": "Raw Time Data",
+      "description": "Time domain raw sensor data",
+      "fields": ["*array"],
+      "handler": "handleRawTimeData"
+    }
+  },
+  "endMarker": "EN",
+  "description": "OpCode registry for RF Matcher communication protocol. Format: OPCODE,value1,value2,...,EN"
+}

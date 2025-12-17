@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VVC Calibration Helper</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-left">
+                <h1>VVC Calibration Helper</h1>
+                <div class="connection-panel">
+                    <div class="control-group">
+                        <select id="baudRate">
+                            <option value="9600">9600</option>
+                            <option value="115200">115200</option>
+                            <option value="230400">230400</option>
+                            <option value="460800">460800</option>
+                            <option value="921600" selected>921600</option>
+                        </select>
+                    </div>
+                    <button id="btnRequestPort" class="btn secondary sm">Port</button>
+                    <button id="btnConnect" class="btn primary sm" disabled>Connect</button>
+                    <button id="btnDisconnect" class="btn secondary sm" disabled>Disconnect</button>
+                    <span id="connectionStatus" class="status-badge disconnected">Disconnected</span>
+                </div>
+            </div>
+            <a href="../index.html" class="btn secondary sm">← RF Control</a>
+        </header>
+
+        <main class="main-layout">
+            <!-- Left Column: Settings & Workflow -->
+            <div class="column left-col">
+                <!-- Calibration Settings -->
+                <section class="panel settings-panel">
+                    <h2>Calibration Settings</h2>
+                    <div class="setting-row">
+                        <label>VVC Select:</label>
+                        <div class="radio-group">
+                            <label><input type="radio" name="vvcSelect" value="0" checked> VVC 0</label>
+                            <label><input type="radio" name="vvcSelect" value="1"> VVC 1</label>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <label for="stepInterval">Step Interval:</label>
+                        <input type="number" id="stepInterval" value="1000" min="1" step="100">
+                    </div>
+                    <div class="setting-row">
+                        <label for="vnaFrequency">VNA Frequency (MHz):</label>
+                        <input type="number" id="vnaFrequency" value="13.56" min="0.1" step="0.01">
+                    </div>
+                </section>
+
+                <!-- Motor Control -->
+                <section class="panel workflow-panel">
+                    <h2>Motor Control</h2>
+                    <div class="workflow-group">
+                        <div class="setting-row">
+                            <label>Current Position:</label>
+                            <span id="currentPosition" class="mono-value">--</span>
+                        </div>
+                        <div class="button-row">
+                            <button id="btnStandby" class="btn">Standby</button>
+                            <button id="btnDisable" class="btn secondary">Disable</button>
+                            <button id="btnSetOrigin" class="btn" style="background: #8b4513; border-color: #8b4513;">Set Origin</button>
+                        </div>
+                        <div class="button-row">
+                            <button id="btnReadPos" class="btn">Read Pos</button>
+                            <button id="btnPosStreamToggle" class="btn toggle">Run Stream</button>
+                        </div>
+                        <div class="button-row">
+                            <button id="btnPrevStep" class="btn secondary">← Prev Step</button>
+                            <button id="btnNextStep" class="btn primary">Next Step →</button>
+                        </div>
+                        <div class="setting-row">
+                            <label for="targetPosition">Target Position:</label>
+                            <input type="number" id="targetPosition" value="0" min="0">
+                            <button id="btnMoveToTarget" class="btn sm">Move</button>
+                        </div>
+                        <hr style="border: none; border-top: 1px solid #444; margin: 10px 0;">
+                        <div class="setting-row">
+                            <label>Override RPM:</label>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="number" id="overrideRpmInput" value="30" min="0" style="width: 60px;">
+                                <button id="btnOverrideRpmSet" class="btn sm">Set</button>
+                                <button id="btnOverrideRpmClear" class="btn sm secondary">Clr</button>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <label>Rewind:</label>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <button id="btnRewind" class="btn sm" style="background: #8a3d5a; border-color: #8a3d5a;">Rewind</button>
+                                <span id="rewindStatus" style="font-size: 0.75rem; color: #888;">--</span>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <label>Find Index:</label>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="number" id="findIndexTarget" value="15000" style="width: 65px;" placeholder="Target">
+                                <input type="number" id="findIndexRpm" value="30" min="1" style="width: 50px;" placeholder="RPM">
+                                <button id="btnFindIndex" class="btn sm" style="background: #5a3d8a; border-color: #5a3d8a;">Find</button>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <label>Index Result:</label>
+                            <span id="findIndexResult" style="font-size: 0.75rem; color: #888;">--</span>
+                        </div>
+                        <hr style="border: none; border-top: 1px solid #444; margin: 10px 0;">
+                        <div class="setting-row">
+                            <label>Move Step:</label>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="number" id="moveStepValue" value="1000" min="1" style="width: 70px;">
+                                <button id="btnMoveUp" class="btn sm">▲ UP</button>
+                                <button id="btnMoveDown" class="btn sm secondary">▼ DOWN</button>
+                            </div>
+                        </div>
+                        <hr style="border: none; border-top: 1px solid #444; margin: 10px 0;">
+                        <div class="setting-row">
+                            <label>Zero Point:</label>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <button id="btnConfirmZero" class="btn sm" style="background: #2e7d32; border-color: #2e7d32;">Confirm Zero Point</button>
+                                <span id="zeroPointStatus" style="font-size: 0.7rem; color: #888;">Set current pos as 0, save offset to FRAM</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Measurement Input -->
+                <section class="panel measurement-panel">
+                    <h2>Measurement Input</h2>
+                    <div class="measurement-form">
+                        <div class="setting-row">
+                            <label for="reactanceOffset">Reactance Offset (Ω):</label>
+                            <input type="number" id="reactanceOffset" value="0" step="0.1">
+                        </div>
+                        <div class="setting-row">
+                            <label for="reactanceInput">Reactance X (Ω):</label>
+                            <input type="number" id="reactanceInput" value="" step="0.1" placeholder="e.g. 50">
+                        </div>
+                        <div class="setting-row">
+                            <label>Capacitance:</label>
+                            <span id="calculatedCapacitance" class="mono-value highlight">-- pF</span>
+                        </div>
+                        <button id="btnRecordData" class="btn primary full-width">Record Data Point</button>
+                    </div>
+                </section>
+
+                <!-- Terminal -->
+                <section class="panel terminal-panel">
+                    <h2>Terminal</h2>
+                    <div id="terminal" class="terminal-output"></div>
+                    <div class="terminal-input">
+                        <input type="text" id="cmdInput" placeholder="Command...">
+                        <button id="btnSend" class="btn sm">Send</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Data Table, Fitting & Graph -->
+            <div class="column right-col">
+                <!-- Data Table -->
+                <section class="panel table-panel">
+                    <div class="panel-header-row">
+                        <h2>Measurement Data</h2>
+                        <div class="table-actions">
+                            <button id="btnClearData" class="btn secondary sm">Clear</button>
+                            <button id="btnExportCsv" class="btn secondary sm">Export CSV</button>
+                            <button id="btnImportCsv" class="btn secondary sm">Import CSV</button>
+                            <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="dataTable">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Step</th>
+                                    <th>X (Ω)</th>
+                                    <th>C (pF)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="dataTableBody">
+                                <!-- Data rows will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-info">
+                        <span id="dataCount">0 points</span>
+                        <span id="selectedCount">0 selected</span>
+                    </div>
+                </section>
+
+                <!-- Fitting Section -->
+                <section class="panel fitting-panel">
+                    <h2>Curve Fitting</h2>
+                    <div class="fitting-controls">
+                        <div class="setting-row">
+                            <label for="fittingType">Fitting Type:</label>
+                            <select id="fittingType">
+                                <optgroup label="Polynomial">
+                                    <option value="poly1">Linear (1st order)</option>
+                                    <option value="poly2">Quadratic (2nd order)</option>
+                                    <option value="poly3" selected>Cubic (3rd order)</option>
+                                    <option value="poly4">4th order</option>
+                                    <option value="poly5">5th order</option>
+                                </optgroup>
+                                <optgroup label="Nonlinear">
+                                    <option value="tanh">tanh: a·tanh(b·x+c)+d</option>
+                                    <option value="log">log: a·ln(x+b)+c</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="button-row">
+                            <button id="btnFitSelected" class="btn primary">Fit Selected</button>
+                            <button id="btnFitAll" class="btn secondary">Fit All</button>
+                        </div>
+                    </div>
+                    <div class="fitting-results" id="fittingResults">
+                        <div class="result-placeholder">Select data points and click "Fit" to calculate</div>
+                    </div>
+                </section>
+
+                <!-- Graph Section -->
+                <section class="panel graph-panel">
+                    <div class="panel-header-row">
+                        <h2>Calibration Curve</h2>
+                        <div class="graph-actions">
+                            <button id="btnResetZoom" class="btn secondary sm">Reset Zoom</button>
+                        </div>
+                    </div>
+                    <div class="graph-container">
+                        <canvas id="calibrationGraph"></canvas>
+                    </div>
+                    <div class="graph-legend">
+                        <span class="legend-item"><span class="dot data"></span> Measured</span>
+                        <span class="legend-item"><span class="dot selected"></span> Selected</span>
+                        <span class="legend-item"><span class="dot fitted"></span> Fitted</span>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div id="graphTooltip" class="graph-tooltip" style="display: none;"></div>
+
+    <script src="js/serial.js"></script>
+    <script src="js/fitting.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
+

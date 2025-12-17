@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S-Parameter Graph - RF Circuit Calculator</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components/toolbar.css">
+    <link rel="stylesheet" href="css/components/marker.css">
+
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+    <!-- App Scripts -->
+    <script src="js/simulation/ComplexMath.js"></script>
+    <script src="js/ui/SParameterGraph.js"></script>
+    <script src="js/ui/SmithChartRenderer.js"></script>
+
+    <script src="js/ui/CSVParser.js"></script>
+    <script src="js/ui/MarkerManager.js"></script>
+    <script src="js/ui/NotificationManager.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-primary);
+            height: 100vh !important;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden !important;
+        }
+
+        .graph-window-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: var(--spacing-md);
+            background: var(--bg-primary);
+            overflow-y: auto;
+        }
+
+        .graph-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+            min-height: 0;
+        }
+
+        /* Override to fill body */
+        #graphContainer {
+            flex: 1;
+        }
+
+        /* Modal Layout Fixes for Float Window */
+        .modal-content {
+            width: 90%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 16px 20px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="graph-window-container">
+        <!-- Exact replica of .graph-panel structure -->
+        <div class="panel graph-panel">
+            <div class="graph-header">
+                <h2 class="panel-title" id="graphTitle">S11 Log Mag vs Frequency</h2>
+                <div class="graph-controls">
+                    <button id="btnSaveGraphData" class="graph-btn" title="Save Graph Data (CSV)">
+                        <span class="icon">💾</span> Save
+                    </button>
+                    <button id="btnLoadGraphData" class="graph-btn" title="Load CSV Data">
+                        <span class="icon">📂</span> Load
+                    </button>
+                    <button id="btnResetZoom" class="graph-btn" title="Reset Zoom (Double-click)">
+                        <span class="icon">🔍</span> Reset
+                    </button>
+                    <button id="btnGraphSettings" class="graph-btn" title="Graph Settings">
+                        <span class="icon">⚙️</span>
+                    </button>
+                    <button id="btnDockGraph" class="graph-btn" title="Dock Window">
+                        <span class="icon">⚓</span>
+                    </button>
+                </div>
+            </div>
+            <div class="graph-container" id="graphContainer" style="position: relative; overflow: hidden;">
+                <canvas id="s11Graph"></canvas>
+            </div>
+            <div class="graph-hint">
+                <span>🖱️ Scroll: Zoom | Drag: Pan | Double-click: Reset</span>
+            </div>
+        </div>
+        <div class="marker-table-container" id="markerTableContainer" style="display: none;">
+            <table class="marker-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>ID</th>
+                        <th>X / R</th>
+                        <th>Value</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="markerTableBody">
+                    <!-- Marker Rows -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <ul id="graphContextMenu" class="context-menu" style="display: none;">
+        <!-- Dynamic Menu Items -->
+    </ul>
+
+    <!-- Graph Settings Modal (Copied from index.html) -->
+    <div id="graphSettingsModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Graph Settings</h3>
+                <button class="modal-close" id="btnCloseModal">&times;</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="measurement">Measurement</button>
+                <button class="settings-tab" data-tab="display">Display</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Measurement Tab Content -->
+                <div id="tabMeasurement" class="settings-tab-content active">
+                    <!-- Meas Section -->
+                    <div class="settings-section">
+                        <h4>Meas</h4>
+                        <p class="settings-description">Select the measurement parameter</p>
+                        <select id="measSelect" class="settings-select">
+                            <option value="S11" selected>S11</option>
+                            <option value="S21">S21</option>
+                            <option value="S12">S12</option>
+                            <option value="S22">S22</option>
+                            <option value="impedance">Impedance</option>
+                            <option value="matchingRange">Matching Range</option>
+                        </select>
+                    </div>
+                    <!-- Matching Range Options (hidden by default) -->
+                    <div class="settings-section matching-range-options" id="matchingRangeOptions"
+                        style="display: none;">
+                        <h4>Matching Range Options</h4>
+                        <div class="matching-range-controls">
+                            <!-- Frequency Selection -->
+                            <div class="frequency-select-section" style="margin-bottom: 12px;">
+                                <p class="settings-description">Select frequency for matching range:</p>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <input type="number" id="matchingRangeFreq" class="settings-input" value="50"
+                                        min="0.001" step="0.1" style="width: 100px;">
+                                    <select id="matchingRangeFreqUnit" class="settings-select" style="width: 80px;">
+                                        <option value="1e3">kHz</option>
+                                        <option value="1e6" selected>MHz</option>
+                                        <option value="1e9">GHz</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Points per Edge -->
+                            <div class="points-select-section" style="margin-bottom: 12px;">
+                                <p class="settings-description">Points per edge (smoothness):</p>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <input type="number" id="matchingRangePoints" class="settings-input" value="20"
+                                        min="2" max="1000" step="1" style="width: 80px;">
+                                    <span style="color: var(--text-muted); font-size: 12px;">points</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <input type="checkbox" id="invertReactance">
+                                <label for="invertReactance">Invert Reactance (Matching Range Mode)</label>
+                            </div>
+                            <div class="component-select-section">
+                                <p class="settings-description">Select components to sweep:</p>
+                                <div id="componentCheckboxes" class="component-checkboxes">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Format Section -->
+                    <div class="settings-section">
+                        <h4>Format</h4>
+                        <p class="settings-description">Select the display format for the graph</p>
+                        <select id="formatSelect" class="settings-select">
+                            <option value="logMag" selected>Log Mag</option>
+                            <option value="linMag">Lin Mag</option>
+                            <option value="linRabsX">Lin R, X</option>
+                            <option value="phase">Phase</option>
+                            <option value="delay">Delay</option>
+                            <option value="smith">Smith</option>
+                            <option value="polar">Polar</option>
+                            <option value="swr">SWR</option>
+                        </select>
+                    </div>
+                    <!-- Lin R, X Options (hidden by default) -->
+                    <div class="settings-section lin-rx-options" id="linRXOptions" style="display: none;">
+                        <h4>Lin R, X Options</h4>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                            <input type="checkbox" id="linRXAbsolute" checked>
+                            <label for="linRXAbsolute">Absolute Imaginary (|X|)</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                            <input type="checkbox" id="linRXHighlightNegative">
+                            <label for="linRXHighlightNegative">Highlight Negative Imag (Red)</label>
+                        </div>
+                    </div>
+                    <!-- X-Axis Scale Section -->
+                    <div class="settings-section">
+                        <h4>X-Axis Scale</h4>
+                        <p class="settings-description">Select the frequency axis scale</p>
+                        <select id="xAxisSelect" class="settings-select">
+                            <option value="linear" selected>Linear</option>
+                            <option value="logarithmic">Logarithmic</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Display Tab Content -->
+                <div id="tabDisplay" class="settings-tab-content">
+                    <!-- Animation Section -->
+                    <div class="settings-section">
+                        <h4>Animation</h4>
+                        <p class="settings-description">Enable/disable graph animation</p>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="animationToggle">
+                            <label for="animationToggle">Enable Animation</label>
+                        </div>
+                    </div>
+                    <!-- Marker Value Section -->
+                    <div class="settings-section">
+                        <h4>Marker</h4>
+                        <p class="settings-description">Display options for markers</p>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="showMarkerValueGlobal">
+                            <label for="showMarkerValueGlobal">Show Marker Value</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnApplySettings" class="btn primary">Apply</button>
+                <button id="btnCancelSettings" class="btn secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Initialization ---
+        // 1. Notification Manager
+        window.notificationManager = new NotificationManager();
+
+        // 2. S-Parameter Graph (passed to MarkerManager internally via events/references eventually, but here we init it first)
+        const sParamGraph = new SParameterGraph('s11Graph');
+
+        // 3. Marker Manager
+        // Ensure table visibility toggles when markers change
+        const originalUpdateTable = sParamGraph.markerManager.updateTable.bind(sParamGraph.markerManager);
+        sParamGraph.markerManager.updateTable = function () {
+            originalUpdateTable();
+            const container = document.getElementById('markerTableContainer');
+            if (container) {
+                container.style.display = this.markers.length > 0 ? 'block' : 'none';
+            }
+        };
+
+        let currentSettings = {
+            format: 'logMag',
+            meas: 'impedance',
+            xAxisScale: 'linear',
+            animation: false,
+            showMarkerValue: true, // Default
+            absoluteImag: true,
+            highlightNegative: false,
+            matchingRange: {
+                invertReactance: false,
+                selectedComponents: [],
+                frequency: 50e6,
+                pointsPerEdge: 20
+            }
+        };
+
+        // Notify opener we are ready
+        if (window.opener) {
+            window.opener.postMessage({ type: 'GRAPH_WINDOW_OPENED' }, '*');
+        }
+
+        // --- Event Listeners ---
+
+        // 1. Save
+        document.getElementById('btnSaveGraphData')?.addEventListener('click', () => {
+            sParamGraph.saveDataAsCSV();
+        });
+
+        // 2. Load
+        document.getElementById('btnLoadGraphData')?.addEventListener('click', () => {
+            loadGraphData();
+        });
+
+        // 3. Reset Zoom
+        document.getElementById('btnResetZoom')?.addEventListener('click', () => {
+            sParamGraph.resetZoom();
+        });
+
+        // 4. Dock
+        document.getElementById('btnDockGraph')?.addEventListener('click', () => {
+            if (window.opener) {
+                // Capture current state
+                const state = {
+                    viewState: sParamGraph.getViewState ? sParamGraph.getViewState() : null,
+                    markers: sParamGraph.markerManager ? sParamGraph.markerManager.markers : [],
+                    settings: currentSettings,
+                    // Serialize CSV data to remove functions/circular references
+                    csvDatasets: (sParamGraph.csvDatasets || []).map(ds => ({
+                        rawData: ds.rawData,
+                        metadata: ds.metadata,
+                        fileName: ds.fileName
+                    })),
+                    loadedMatchingRangeData: sParamGraph.loadedMatchingRangeData || []
+                };
+                window.opener.postMessage({ type: 'DOCK_WITH_STATE', state: state }, '*');
+            }
+            window.close();
+        });
+
+        // 5. Settings Modal
+        setupSettingsModal();
+
+
+        // --- Message Handling ---
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+
+            if (message.type === 'SIMULATION_DATA') {
+                handleSimulationData(message.data, message.fitView, message.viewState);
+            } else if (message.type === 'GRAPH_SETTINGS') {
+                applyExternalSettings(message.settings);
+            } else if (message.type === 'INIT_MEAS_OPTIONS') {
+                updateMeasOptions(message.options);
+            } else if (message.type === 'MATCHING_RANGE_DATA') {
+                handleMatchingRangeData(message.data, message.invertReactance);
+            } else if (message.type === 'LOADED_MATCHING_RANGE_DATA') {
+                if (sParamGraph && sParamGraph.setLoadedMatchingRangeData) {
+                    sParamGraph.setLoadedMatchingRangeData(message.data);
+                }
+            } else if (message.type === 'MARKERS_DATA') {
+                handleMarkersData(message.markers);
+            } else if (event.data.type === 'CSV_DATA') {
+                handleCSVData(message.datasets);
+            } else if (event.data.type === 'TUNABLE_COMPONENTS') {
+                handleTunableComponents(message.components);
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (window.opener) {
+                window.opener.postMessage({ type: 'GRAPH_WINDOW_CLOSED' }, '*');
+            }
+        });
+
+        // --- Logic ---
+
+        function handleSimulationData(data, fitView, viewState) {
+            const reconstructed = reconstructSimulationResults(data);
+
+            // If we have a specific view state to restore (from sync)
+            if (viewState) {
+                sParamGraph.setSimulationData(reconstructed, false); // Don't fit view yet
+                sParamGraph.setViewState(viewState);
+            } else {
+                sParamGraph.setSimulationData(reconstructed, fitView);
+            }
+
+            // Explicitly force update to ensure rendering
+            if (sParamGraph.updateGraph) {
+                sParamGraph.updateGraph(fitView);
+            }
+        }
+
+        function handleMatchingRangeData(data, invertReactance) {
+            // Apply matching range data to graph
+            if (sParamGraph) {
+                sParamGraph.setMatchingRangeData(data, invertReactance);
+            }
+        }
+
+        function handleMarkersData(markers) {
+            if (!sParamGraph || !sParamGraph.markerManager) return;
+
+            // Direct state restore
+            sParamGraph.markerManager.markers = markers || [];
+
+            // Update counter to prevent ID collision
+            if (markers && markers.length > 0) {
+                const maxId = markers.reduce((max, m) => {
+                    const idNum = parseInt(m.id.substring(1));
+                    return isNaN(idNum) ? max : Math.max(max, idNum);
+                }, 0);
+                sParamGraph.markerManager.counter = maxId + 1;
+            } else {
+                sParamGraph.markerManager.counter = 1;
+            }
+
+            // Update UI
+            sParamGraph.markerManager.updateTable();
+            toggleMarkerTable(sParamGraph.markerManager.markers.length > 0);
+
+            if (sParamGraph.chart) sParamGraph.chart.update();
+            if (sParamGraph.smithChartRenderer) sParamGraph.smithChartRenderer.draw();
+        }
+
+        // Helper to toggle marker table visibility
+        function toggleMarkerTable(show) {
+            const container = document.getElementById('markerTableContainer');
+            if (container) {
+                container.style.display = show ? 'block' : 'none';
+            }
+        }
+
+        function reconstructSimulationResults(jsonResults) {
+            if (!jsonResults || !jsonResults.success) return jsonResults;
+            const results = { ...jsonResults };
+
+            if (results.zin) {
+                results.zin = results.zin.map(z => new Complex(z.real, z.imag));
+            }
+            if (results.sMatrix) {
+                for (const key in results.sMatrix) {
+                    const matrixData = results.sMatrix[key];
+                    if (matrixData.complex) {
+                        matrixData.complex = matrixData.complex.map(c => new Complex(c.real, c.imag));
+                    }
+                }
+            }
+            return results;
+        }
+
+        function handleCSVData(datasets) {
+            if (!sParamGraph) return;
+
+            sParamGraph.clearCsvData();
+            if (!datasets || datasets.length === 0) return;
+
+            datasets.forEach(ds => {
+                sParamGraph.addCsvData(ds.rawData, {
+                    fileName: ds.fileName,
+                    ...ds.metadata
+                });
+            });
+        }
+
+        function applyExternalSettings(settings) {
+            currentSettings = settings;
+
+            sParamGraph.setFormat(settings.format);
+            sParamGraph.setMeas(settings.meas);
+            sParamGraph.setXAxisScale(settings.xAxisScale);
+            sParamGraph.setMeas(settings.meas);
+            sParamGraph.setXAxisScale(settings.xAxisScale);
+            sParamGraph.setAnimation(settings.animation);
+
+            // Apply Show Marker Value
+            if (sParamGraph.markerManager) {
+                const showVal = settings.showMarkerValue !== undefined ? settings.showMarkerValue : true;
+                sParamGraph.markerManager.setShowValueOnMarker(showVal);
+            }
+
+            // Apply absoluteImag setting
+            const absImag = settings.absoluteImag !== undefined ? settings.absoluteImag : true;
+            sParamGraph.setAbsoluteImag(absImag);
+
+            // Apply highlightNegative setting
+            const highlightNeg = settings.highlightNegative !== undefined ? settings.highlightNegative : false;
+            sParamGraph.setHighlightNegative(highlightNeg);
+
+            // Merge Matching Range Settings
+            if (settings.matchingRange) {
+                currentSettings.matchingRange = { ...currentSettings.matchingRange, ...settings.matchingRange };
+            }
+
+            updateGraphTitle();
+            handleMeasChange(); // Update UI for options visibility and highlights
+        }
+
+        function updateGraphTitle() {
+            const titleEl = document.getElementById('graphTitle');
+            if (titleEl) titleEl.textContent = sParamGraph.getGraphTitle();
+        }
+
+        function getSelectedComponentIds() {
+            const container = document.getElementById('componentCheckboxes');
+            if (!container) return [];
+            return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        }
+
+        function updateMeasOptions(options) {
+            const select = document.getElementById('measSelect');
+            if (!select) return;
+            select.innerHTML = '';
+
+            options.forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt;
+                el.textContent = opt;
+                if (opt === currentSettings.meas) el.selected = true;
+                select.appendChild(el);
+            });
+
+            // Add Matching Range option
+            const matchingRangeOption = document.createElement('option');
+            matchingRangeOption.value = 'matchingRange';
+            matchingRangeOption.textContent = 'Matching Range';
+            if (currentSettings.meas === 'matchingRange') {
+                matchingRangeOption.selected = true;
+            }
+            select.appendChild(matchingRangeOption);
+        }
+
+        // Handle Meas selection change - show/hide options, restrict format
+        function handleMeasChange() {
+            const measSelect = document.getElementById('measSelect');
+            const matchingRangeOptions = document.getElementById('matchingRangeOptions');
+            const formatSelect = document.getElementById('formatSelect');
+            const xAxisSelect = document.getElementById('xAxisSelect');
+
+            if (!measSelect) return;
+
+            const isMatchingRange = measSelect.value === 'matchingRange';
+
+            // Show/hide Matching Range options
+            if (matchingRangeOptions) {
+                matchingRangeOptions.style.display = isMatchingRange ? 'block' : 'none';
+            }
+
+            // Restrict Format to Smith only when Matching Range is selected
+            if (formatSelect) {
+                const options = formatSelect.options;
+                for (let i = 0; i < options.length; i++) {
+                    if (isMatchingRange) {
+                        options[i].disabled = options[i].value !== 'smith';
+                    } else {
+                        options[i].disabled = false;
+                    }
+                }
+
+                if (isMatchingRange) {
+                    formatSelect.value = 'smith';
+                }
+            }
+
+            // Disable X-Axis Scale when Matching Range is selected
+            if (xAxisSelect) {
+                xAxisSelect.disabled = isMatchingRange;
+            }
+
+            // Handle Lin R, X Options Visibility
+            if (linRXOptions && formatSelect) {
+                linRXOptions.style.display = (formatSelect.value === 'linRabsX') ? 'block' : 'none';
+            }
+
+            // Populate component checkboxes if we have data
+            if (isMatchingRange && currentSettings.tunableComponents) {
+                populateComponentCheckboxes(currentSettings.tunableComponents);
+            }
+        }
+
+        // --- Tunable Components & Checkboxes ---
+
+        function handleTunableComponents(components) {
+            currentSettings.tunableComponents = components;
+            if (currentSettings.meas === 'matchingRange') {
+                populateComponentCheckboxes(components);
+            }
+        }
+
+        function populateComponentCheckboxes(components) {
+            const container = document.getElementById('componentCheckboxes');
+            if (!container) return;
+
+            if (!components || components.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); font-size: 12px;">No tunable components found.</p>';
+                return;
+            }
+
+            // Preserve selected state
+            const selectedIds = currentSettings.matchingRange ? (currentSettings.matchingRange.selectedComponents || []) : [];
+
+            container.innerHTML = components.map(comp => `
+                <div class="component-checkbox-item">
+                    <input type="checkbox" 
+                           id="compCheck_${comp.id}" 
+                           value="${comp.id}"
+                           ${selectedIds.includes(comp.id) ? 'checked' : ''}>
+                    <label for="compCheck_${comp.id}">${comp.id}</label>
+                    <span class="range-info">${comp.minDisplay} - ${comp.maxDisplay}</span>
+                </div>
+            `).join('');
+
+            // Add Styles for checkbox items
+            if (!document.getElementById('checkboxStyles')) {
+                const style = document.createElement('style');
+                style.id = 'checkboxStyles';
+                style.textContent = `
+                    .component-checkbox-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+                    .range-info { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+
+        // --- Settings Modal Logic ---
+        function setupSettingsModal() {
+            const btn = document.getElementById('btnGraphSettings');
+            const modal = document.getElementById('graphSettingsModal');
+            const closeBtn = document.getElementById('btnCloseModal');
+            const cancelBtn = document.getElementById('btnCancelSettings');
+            const applyBtn = document.getElementById('btnApplySettings');
+            const measSelect = document.getElementById('measSelect');
+
+            btn?.addEventListener('click', () => {
+                // Populate current values
+                document.getElementById('formatSelect').value = currentSettings.format;
+                document.getElementById('measSelect').value = currentSettings.meas;
+                document.getElementById('xAxisSelect').value = currentSettings.xAxisScale;
+                document.getElementById('xAxisSelect').value = currentSettings.xAxisScale;
+                document.getElementById('animationToggle').checked = currentSettings.animation;
+
+                const showMarkerValue = document.getElementById('showMarkerValueGlobal');
+                if (showMarkerValue) {
+                    showMarkerValue.checked = (currentSettings.showMarkerValue !== undefined) ? currentSettings.showMarkerValue : true;
+                }
+
+                const linRXAbsolute = document.getElementById('linRXAbsolute');
+                if (linRXAbsolute) {
+                    linRXAbsolute.checked = (currentSettings.absoluteImag !== undefined) ? currentSettings.absoluteImag : true;
+                }
+
+                const linRXHighlightNegative = document.getElementById('linRXHighlightNegative');
+                if (linRXHighlightNegative) {
+                    linRXHighlightNegative.checked = (currentSettings.highlightNegative !== undefined) ? currentSettings.highlightNegative : false;
+                }
+
+                // Matching Range Settings
+                const invertReactance = document.getElementById('invertReactance');
+                if (invertReactance && currentSettings.matchingRange) {
+                    invertReactance.checked = currentSettings.matchingRange.invertReactance;
+                }
+
+                const matchingRangeFreq = document.getElementById('matchingRangeFreq');
+                const matchingRangeFreqUnit = document.getElementById('matchingRangeFreqUnit');
+                if (matchingRangeFreq && matchingRangeFreqUnit && currentSettings.matchingRange) {
+                    const freq = currentSettings.matchingRange.frequency || 50e6;
+                    // Simple unit logic
+                    let val, unit;
+                    if (freq >= 1e9) { val = freq / 1e9; unit = '1e9'; }
+                    else if (freq >= 1e6) { val = freq / 1e6; unit = '1e6'; }
+                    else { val = freq / 1e3; unit = '1e3'; }
+                    matchingRangeFreq.value = val;
+                    matchingRangeFreqUnit.value = unit;
+                }
+
+                const matchingRangePoints = document.getElementById('matchingRangePoints');
+                if (matchingRangePoints && currentSettings.matchingRange) {
+                    matchingRangePoints.value = currentSettings.matchingRange.pointsPerEdge || 20;
+                }
+
+                // Tunable Components are handled in handleMeasChange -> populateComponentCheckboxes
+
+                // Initialize Meas change handler
+                handleMeasChange();
+
+                // Reset to Measurement Tab
+                const tabs = modal.querySelectorAll('.settings-tab');
+                const contents = modal.querySelectorAll('.settings-tab-content');
+
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+
+                const measTab = modal.querySelector('.settings-tab[data-tab="measurement"]');
+                const measContent = document.getElementById('tabMeasurement');
+
+                if (measTab) measTab.classList.add('active');
+                if (measContent) measContent.classList.add('active');
+
+                modal.classList.add('active');
+            });
+
+            // Bind Meas change event
+            measSelect?.addEventListener('change', handleMeasChange);
+
+            // Bind Format change event for UI update
+            const formatSelect = document.getElementById('formatSelect');
+            formatSelect?.addEventListener('change', handleMeasChange);
+
+            const close = () => modal.classList.remove('active');
+            closeBtn?.addEventListener('click', close);
+            cancelBtn?.addEventListener('click', close);
+
+            applyBtn?.addEventListener('click', () => {
+                const measValue = document.getElementById('measSelect').value;
+                const isMatchingRange = measValue === 'matchingRange';
+                const linRXAbsolute = document.getElementById('linRXAbsolute');
+
+                const newSettings = {
+                    format: isMatchingRange ? 'smith' : document.getElementById('formatSelect').value,
+                    meas: measValue,
+                    xAxisScale: document.getElementById('xAxisSelect').value,
+                    animation: document.getElementById('animationToggle').checked,
+                    xAxisScale: document.getElementById('xAxisSelect').value,
+                    animation: document.getElementById('animationToggle').checked,
+                    animation: document.getElementById('animationToggle').checked,
+                    showMarkerValue: document.getElementById('showMarkerValueGlobal') ? document.getElementById('showMarkerValueGlobal').checked : true,
+                    absoluteImag: linRXAbsolute ? linRXAbsolute.checked : true,
+                    matchingRange: {
+                        invertReactance: document.getElementById('invertReactance') ? document.getElementById('invertReactance').checked : false,
+                        frequency: document.getElementById('matchingRangeFreq') ?
+                            parseFloat(document.getElementById('matchingRangeFreq').value) * parseFloat(document.getElementById('matchingRangeFreqUnit').value) : 50e6,
+                        pointsPerEdge: document.getElementById('matchingRangePoints') ? parseInt(document.getElementById('matchingRangePoints').value) : 20,
+                        selectedComponents: getSelectedComponentIds()
+                    }
+                };
+
+                // Apply locally
+                applyExternalSettings(newSettings);
+
+                // Notify parent to sync settings
+                if (window.opener) {
+                    window.opener.postMessage({ type: 'SYNC_SETTINGS', settings: newSettings }, '*');
+                }
+
+                close();
+            });
+
+            // Tab Switching Logic
+            const tabs = modal.querySelectorAll('.settings-tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs
+                    tabs.forEach(t => t.classList.remove('active'));
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+
+                    // Hide all tab contents
+                    const contents = modal.querySelectorAll('.settings-tab-content');
+                    contents.forEach(content => content.classList.remove('active'));
+
+                    // Show target tab content
+                    const targetId = tab.getAttribute('data-tab');
+                    const targetContent = modal.querySelector(`#tab${targetId.charAt(0).toUpperCase() + targetId.slice(1)}`);
+                    if (targetContent) {
+                        targetContent.classList.add('active');
+                    }
+                });
+            });
+        }
+
+        // --- CSV Load Logic ---
+        function loadGraphData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv,.s1p,.s2p';
+            input.multiple = true;
+            input.onchange = async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+
+                // Purely local loading
+                try {
+                    sParamGraph.clearCsvData();
+                    for (const file of files) {
+                        const text = await file.text();
+                        const fileName = file.name.toLowerCase();
+                        let parseResult;
+
+                        if (fileName.endsWith('.s1p') || fileName.endsWith('.s2p')) {
+                            parseResult = CSVParser.parseTouchstone(text);
+                        } else {
+                            parseResult = CSVParser.parse(text);
+                        }
+
+                        if (parseResult.metadata && parseResult.metadata.type === 'matchingRange') {
+                            if (currentSettings.meas !== 'matchingRange') {
+                                alert('Meas를 "Matching Range"로 변경한 후 로드해 주세요.');
+                                return;
+                            }
+
+                            if (sParamGraph && sParamGraph.setLoadedMatchingRangeData) {
+                                sParamGraph.setLoadedMatchingRangeData(parseResult.paths);
+                            }
+                            continue; // Skip addCsvData
+                        }
+
+                        if (parseResult.data && parseResult.data.length > 0) {
+                            sParamGraph.addCsvData(parseResult.data, {
+                                fileName: file.name,
+                                ...parseResult.metadata
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Error loading files: ' + err.message);
+                }
+            };
+            input.click();
+        }
+    </script>
+</body>
+
+</html>

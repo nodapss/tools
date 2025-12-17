@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ASCII"?>
+<sdkproject:SdkProject xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sdkproject="http://www.xilinx.com/sdkproject" name="MatFW_001" location="C:/Users/admin/Documents/Projects_SEMES/RFMatcher/SAMBB_v1.01.007/Vitis/MatFW_002/MatFW_001" platform="C:/Users/admin/Documents/Projects_SEMES/RFMatcher/SAMBB_v1.01.007/Vitis/MatFW_001/design_1_wrapper/export/design_1_wrapper/design_1_wrapper.xpfm" platformUID="xilinx:eclypse-z7::0.0(custom)" systemProject="MatFW_001_system" sysConfig="design_1_wrapper" runtime="cpp" cpu="standalone_ps7_cortexa9_0" cpuInstance="ps7_cortexa9_0" os="standalone" language="CPP" mssSignature="b7c50b6b8b2e4406f175ceef8f6fbf55">
+  <configuration name="Debug" id="xilinx.gnu.armv7.exe.debug.2043268850">
+    <configBuildOptions xsi:type="sdkproject:SdkOptions"/>
+    <lastBuildOptions xsi:type="sdkproject:SdkOptions"/>
+  </configuration>
+  <configuration name="Release" id="xilinx.gnu.armv7.exe.release.1722455413" dirty="true">
+    <configBuildOptions xsi:type="sdkproject:SdkOptions"/>
+  </configuration>
+  <template appTemplateName="empty_application"/>
+</sdkproject:SdkProject>

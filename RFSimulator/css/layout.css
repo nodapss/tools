@@ -1,0 +1,866 @@
+/* ===== App Layout ===== */
+.app-container {
+    display: grid;
+    grid-template-rows: 1fr;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ===== Header ===== */
+/* ===== Header (Removed) ===== */
+/* .header styles removed */
+
+.header-left {
+    display: flex;
+    align-items: center;
+    padding-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.logo {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+/* ===== Circuit Header (Browser Frame Style) ===== */
+/* ===== Circuit Header (Browser Frame Style) ===== */
+.circuit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* Changed from flex-end to accommodate title */
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+    min-height: 40px;
+    /* Match graph header height approximately */
+}
+
+/* Match graph button styles */
+.circuit-header .btn {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 11px;
+}
+
+.circuit-header .btn .icon {
+    font-size: 12px;
+}
+
+.circuit-header .header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+/* ===== Floating Frequency Settings ===== */
+.frequency-settings {
+    position: absolute;
+    top: 65px;
+    /* Position below the header (approx 40px + padding) */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    z-index: 100;
+    /* Ensure it floats above canvas */
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-primary);
+}
+
+.frequency-settings label {
+    margin-left: var(--spacing-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.frequency-settings label:first-child {
+    margin-left: 0;
+}
+
+/* ===== Main Content ===== */
+.main-content {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr 1fr;
+    overflow: hidden;
+    min-height: 0;
+    /* Important for nested grid scrolling */
+    grid-template-rows: minmax(0, 1fr);
+}
+
+/* ===== Sidebars ===== */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-primary);
+    overflow-y: auto;
+    min-height: 0;
+    /* Allow shrinking to container height */
+}
+
+/* Prevent panels from shrinking to fit, forcing scroll */
+.sidebar>* {
+    flex-shrink: 0;
+}
+
+.left-sidebar {
+    border-right: 1px solid var(--border-primary);
+    overflow-y: auto;
+    max-height: 100%;
+}
+
+.right-sidebar {
+    border-left: 1px solid var(--border-primary);
+}
+
+/* ===== Graph Sidebar ===== */
+.graph-sidebar {
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-md);
+    background: var(--bg-primary);
+    min-width: 250px;
+    position: relative;
+}
+
+.graph-sidebar .graph-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* ===== Resizable Divider ===== */
+.resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 10;
+    transition: background var(--transition-fast);
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+    background: var(--accent-secondary);
+}
+
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 40px;
+    background: var(--border-primary);
+    border-radius: 1px;
+    transition: background var(--transition-fast);
+}
+
+.resize-handle:hover::before,
+.resize-handle.active::before {
+    background: var(--accent-secondary);
+}
+
+/* ===== Canvas Container ===== */
+.canvas-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    /* Changed to match sidebar background for panel gap */
+    overflow: hidden;
+    padding: var(--spacing-md);
+    /* Add padding for panel look */
+}
+
+/* ===== Circuit Panel (New Wrapper) ===== */
+.circuit-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    /* .panel class handles border, radius, bg-secondary */
+}
+
+.canvas-wrapper {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.canvas-info {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ===== Graph Panel ===== */
+.graph-panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.graph-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+    position: relative;
+    /* Ensure buttons are not covered */
+    z-index: 20;
+    /* Above resize handle (10) */
+}
+
+.graph-header .panel-title {
+    padding: 0;
+    background: none;
+    border: none;
+    margin: 0;
+}
+
+.graph-controls {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.graph-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.graph-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+}
+
+.graph-btn .icon {
+    font-size: 12px;
+}
+
+.graph-container {
+    flex: 1;
+    position: relative;
+    padding: var(--spacing-sm);
+    min-height: 0;
+    overflow: hidden;
+    /* Prevent canvas overflow */
+}
+
+.graph-container canvas {
+    width: 100%;
+    height: 100%;
+}
+
+.graph-container .placeholder-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.graph-hint {
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-primary);
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+
+/* ===== Modal Styles ===== */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+}
+
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.modal-content {
+    position: relative;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 400px;
+    max-height: 90vh;
+    overflow: hidden;
+    animation: modalSlideIn 0.2s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.modal-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: var(--spacing-lg);
+    overflow-y: auto;
+    max-height: calc(90vh - 140px);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-primary);
+}
+
+/* Settings Section */
+.settings-section {
+    margin-bottom: var(--spacing-lg);
+}
+
+.settings-section:last-child {
+    margin-bottom: 0;
+}
+
+.settings-section h4 {
+    margin: 0 0 var(--spacing-xs) 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.settings-description {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.settings-select {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.settings-select:hover {
+    border-color: var(--border-focus);
+}
+
+.settings-select:focus {
+    outline: none;
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.2);
+}
+
+.settings-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* ===== Settings Tabs ===== */
+.settings-tabs {
+    display: flex;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
+    padding: 0 var(--spacing-lg);
+}
+
+.settings-tab {
+    padding: 12px 16px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.2s;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+.settings-tab:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+
+.settings-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.settings-tab-content {
+    display: none;
+    animation: fadeIn 0.2s ease;
+}
+
+.settings-tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* ===== Component Parameter Modal ===== */
+.component-modal {
+    width: 420px;
+    max-width: 95vw;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.component-modal .modal-header {
+    height: 48px;
+    flex-shrink: 0;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.component-modal .modal-body {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.component-modal .modal-footer {
+    height: 56px;
+    flex-shrink: 0;
+    padding: 0 24px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-primary);
+}
+
+/* Parameter Section */
+.param-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.param-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Value Row (Input + Unit) */
+.value-row {
+    display: flex;
+    gap: 8px;
+    height: 40px;
+}
+
+.value-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+}
+
+.value-input:focus {
+    outline: none;
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.2);
+}
+
+.unit-select {
+    width: 90px;
+    flex-shrink: 0;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.unit-select:focus {
+    outline: none;
+    border-color: var(--accent-secondary);
+}
+
+/* Range Section */
+.range-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.range-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.range-row {
+    display: flex;
+    gap: 16px;
+}
+
+.range-group {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.range-group label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    width: 32px;
+    flex-shrink: 0;
+}
+
+.range-input {
+    flex: 1;
+    min-width: 60px;
+    padding: 6px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.range-input:focus {
+    outline: none;
+    border-color: var(--accent-secondary);
+}
+
+.range-unit {
+    width: 64px;
+    flex-shrink: 0;
+    padding: 6px 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+/* Slider Section */
+.slider-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.param-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.param-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--accent-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.param-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+}
+
+.param-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--accent-secondary);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+/* ===== Graph Hidden State ===== */
+.graph-sidebar.hidden {
+    display: none !important;
+}
+
+.main-content.graph-hidden {
+    grid-template-columns: var(--sidebar-width) 1fr !important;
+}
+
+/* ===== Responsive Layout ===== */
+@media (max-width: 1199px) {
+    .app-container {
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+        /* Disable page scroll to fit window */
+        display: grid;
+        grid-template-rows: 1fr;
+    }
+
+    /* Keep grid for internal structure but allow it to grow */
+    .app-container {
+        display: grid;
+        grid-template-rows: 1fr;
+    }
+
+    .main-content {
+        /* Change from fixed var(--sidebar-width) to proportional split */
+        grid-template-columns: 1fr 4fr;
+        grid-template-rows: 55% 45%;
+        /* Default percentage split */
+        height: 100%;
+        overflow: hidden;
+    }
+
+    /* Sidebar (Left) */
+    .left-sidebar {
+        grid-row: 1;
+        grid-column: 1;
+        height: 100%;
+        /* Match row height */
+        /* max-height removed to allow growth with row */
+        /* max-height: 600px; */
+        height: 100%;
+        overflow-y: auto;
+        /* Internal scroll */
+
+        /* Enable Container Queries */
+        container-type: inline-size;
+        container-name: sidebar;
+    }
+
+    /* Circuit Canvas (Right) */
+    .canvas-container {
+        grid-row: 1;
+        grid-column: 2;
+        height: 100%;
+        /* Match row height */
+        min-height: 600px;
+    }
+
+    /* Graph Sidebar (Bottom) */
+    .right-sidebar.graph-sidebar {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        border-left: none;
+        border-top: 1px solid var(--border-primary);
+        min-width: unset;
+        height: 100%;
+        /* Fixed height removed to allow grid control */
+    }
+
+    /* Resize Handle (Horizontal) */
+    .resize-handle {
+        display: block;
+        width: 100%;
+        height: 10px;
+        /* Slightly larger hit area */
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: auto;
+        cursor: row-resize;
+        z-index: 100;
+        /* Higher z-index to be above adjacent elements */
+    }
+
+    .resize-handle::before {
+        width: 40px;
+        height: 2px;
+        /* Horizontal mark */
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+    }
+}
+
+/* ===== Modeless Graph Settings Modal ===== */
+#graphSettingsModal {
+    pointer-events: none;
+    /* Allow clicks to pass through container */
+}
+
+#graphSettingsModal .modal-overlay {
+    background: transparent !important;
+    pointer-events: none;
+    /* Allow clicks to pass through overlay */
+}
+
+#graphSettingsModal .modal-content {
+    pointer-events: auto;
+    /* Re-enable clicks on the modal itself */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    /* Stronger shadow for visibility */
+}
+
+/* ===== Container Queries for Sidebar Layout ===== */
+@container sidebar (max-width: 180px) {
+    .sidebar {
+        padding: var(--spacing-sm);
+        gap: var(--spacing-sm);
+    }
+
+    .header-left {
+        padding-bottom: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .logo {
+        font-size: 14px;
+    }
+
+    .panel-title {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 11px;
+    }
+}
+
+@container sidebar (max-width: 120px) {
+    .logo {
+        font-size: 12px;
+        white-space: normal;
+        /* Allow wrapping if needed or keep nowrap */
+    }
+
+    .panel-title {
+        font-size: 10px;
+        text-align: center;
+    }
+}

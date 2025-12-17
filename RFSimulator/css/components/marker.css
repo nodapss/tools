@@ -1,0 +1,246 @@
+/* Marker Table Container */
+.marker-table-container {
+    width: 100%;
+    /* Max height to prevent taking too much space */
+    max-height: 150px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-primary);
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+/* Marker Table */
+.marker-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--text-secondary);
+}
+
+.marker-table th,
+.marker-table td {
+    padding: 0 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-primary);
+    line-height: normal;
+    height: var(--marker-row-height);
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+.marker-table th {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+}
+
+.marker-table tr:hover {
+    background: var(--bg-hover);
+}
+
+.marker-table td {
+    white-space: nowrap;
+}
+
+/* Editable Input Styles */
+.marker-table input[type=number] {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    margin: 0;
+    -moz-appearance: textfield;
+    /* Firefox */
+}
+
+/* Hide Spinner (Chrome, Safari, Edge, Opera) */
+.marker-table input[type=number]::-webkit-outer-spin-button,
+.marker-table input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.marker-table input[type=number]:focus {
+    outline: 1px solid var(--accent-primary);
+    background: var(--bg-primary);
+}
+
+.marker-color-box {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    padding: 4px 0;
+    min-width: 160px;
+    list-style: none;
+    margin: 0;
+    display: none;
+}
+
+.context-menu-item {
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.context-menu-item:hover {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.context-menu-item .icon {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background: var(--border-primary);
+    margin: 4px 0;
+}
+
+/* --- Marker Settings & Grid Layout --- */
+
+/* Settings Button */
+.marker-settings-btn {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    background: transparent;
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+.marker-settings-btn:hover {
+    opacity: 1;
+    background: var(--bg-hover);
+}
+
+/* Settings Modal */
+.marker-settings-modal {
+    position: fixed;
+    /* Fallback */
+    width: 200px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.marker-settings-header {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.marker-settings-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-secondary);
+}
+
+.setting-item input[type=range] {
+    width: 100%;
+}
+
+.layout-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.layout-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+/* Split Table Layout */
+.marker-grid-container {
+    display: none;
+}
+
+.marker-split-container {
+    display: flex;
+    width: 100%;
+    /* Removed height: 100% and overflow: hidden to allow natural expansion */
+}
+
+.marker-split-column {
+    flex: 1;
+    /* Removed overflow-y/x: auto so columns don't scroll individually */
+    border-right: 1px solid var(--border-primary);
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+}
+
+.marker-split-column:last-child {
+    border-right: none;
+}
+
+/* Ensure inside tables handle layout correctly */
+.marker-split-column .marker-table {
+    margin-bottom: 0;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.marker-split-column .marker-table th,
+.marker-split-column .marker-table td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 4px 8px;
+}

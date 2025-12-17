@@ -1,0 +1,125 @@
+#include "xil_printf.h"
+#include "xparameters.h"
+#include "sleep.h"
+#include "xstatus.h"
+#include "RFSensor.hpp"
+#include "Communication.hpp"
+#include "WebTerminal.hpp"
+#include "MotionBoard.hpp"
+#include "DebugMode.hpp"
+#include "AutoMatchingMode.hpp"
+
+// Initialize Sensors
+static RFSensor iSensor(
+    XPAR_AXI_BRAM_CTRL_0_S_AXI_BASEADDR, XPAR_AXI_BRAM_CTRL_1_S_AXI_BASEADDR,
+    XPAR_AXI_BRAM_CTRL_2_S_AXI_BASEADDR, XPAR_AXI_BRAM_CTRL_3_S_AXI_BASEADDR,
+    XPAR_AXI_GPIO_10_BASEADDR, XPAR_AXI_GPIO_5_BASEADDR, XPAR_AXI_GPIO_6_BASEADDR,
+    0, kSamplingRateHz, kFftLength, kTargetFreqHz, 1.0f, 1.0f, 0.0f);
+
+static RFSensor oSensor(
+    XPAR_AXI_BRAM_CTRL_4_S_AXI_BASEADDR, XPAR_AXI_BRAM_CTRL_5_S_AXI_BASEADDR,
+    XPAR_AXI_BRAM_CTRL_6_S_AXI_BASEADDR, XPAR_AXI_BRAM_CTRL_7_S_AXI_BASEADDR,
+    XPAR_AXI_GPIO_13_BASEADDR, XPAR_AXI_GPIO_11_BASEADDR, XPAR_AXI_GPIO_12_BASEADDR,
+    1, kSamplingRateHz, kFftLength, kTargetFreqHz, 1.0f, 1.0f, 0.0f);
+
+// Initialize Motion Board (motor indices: M1=0, M2=1)
+// GPIO 0/1: M1 position control (out/in)
+// GPIO 2/3: M2 position control (out/in)
+// GPIO 8: M1 encoder index/stall/override RPM
+// GPIO 9: M2 encoder index/stall/override RPM
+static MotionBoard mBoard1(BOARD1_ADDR,
+                            0, 1,  // Motor indices for FRAM storage
+                            XPAR_AXI_GPIO_0_BASEADDR, XPAR_AXI_GPIO_1_BASEADDR,
+                            XPAR_AXI_GPIO_2_BASEADDR, XPAR_AXI_GPIO_3_BASEADDR,
+                            XPAR_AXI_GPIO_8_BASEADDR, XPAR_AXI_GPIO_9_BASEADDR);
+
+// Initialize Debug Mode (requires sensor and board references)
+static DebugMode debugMode(XPAR_AXI_GPIO_7_BASEADDR, &iSensor, &oSensor, &mBoard1);
+
+// Initialize Auto Matching Mode (with MotionBoard for motor position reporting)
+static AutoMatchingMode autoMatchingMode(&iSensor, &mBoard1);
+
+int main(void) {
+    WebTerminal::print("System booting...\n\r");
+
+    // Initialize Communication
+    if (Communication::initGic() != XST_SUCCESS || 
+        Communication::initException() != XST_SUCCESS || 
+        Communication::init() != XST_SUCCESS) {
+        WebTerminal::print("Communication init failed\n\r");
+        return XST_FAILURE;
+    }
+
+    // Initialize Debug Mode
+    if (debugMode.initialize() != XST_SUCCESS) {
+        WebTerminal::print("Debug mode init failed\n\r");
+        return XST_FAILURE;
+    }
+
+    // Initialize Motion Board (GPIO initialization is handled internally)
+    if (mBoard1.initialize() != XST_SUCCESS) {
+        WebTerminal::print("Motion board init failed\n\r");
+        return XST_FAILURE;
+    }
+
+    // Load Matcher Info from FRAM (all processing is done inside loadMatcherInfo)
+    mBoard1.loadMatcherInfo(&iSensor, &oSensor);
+    WebTerminal::print("First Index Pos: M1=%d, M2=%d (from FRAM)\n\r",
+        mBoard1.matcherInfo.firstIndexPos[0], mBoard1.matcherInfo.firstIndexPos[1]);
+    
+    // Apply loaded stream settings to DebugMode and AutoMatchingMode
+    debugMode.applyStreamSettingsFromBoard();
+    autoMatchingMode.setMotorPosReportRate(mBoard1.matcherInfo.motorPosStreamRate);
+
+    // Initialize motor drivers
+    mBoard1.initMotorBySpi(DRV8711_SPI_MOTOR1);
+    mBoard1.initMotorBySpi(DRV8711_SPI_MOTOR2);
+    mBoard1.HWReset(DRV8711_SPI_MOTOR1);
+    mBoard1.HWReset(DRV8711_SPI_MOTOR2);
+    
+    // Set motors to standby mode (enable drivers before motor initialization)
+    WebTerminal::print("Setting motors to standby mode...\n\r");
+    mBoard1.setCtrlReg(DRV8711_SPI_MOTOR1, DRV8711_CTRL_STANDBY);
+
+    // Initialize Sensors
+    iSensor.initializeAdc();
+    oSensor.initializeAdc();
+    
+    // Initialize motors by encoder index (rewind + find index + set origin)
+    WebTerminal::print("Starting motor index-based initialization...\n\r");
+    if (mBoard1.initializeMotorByIndex(mBoard1.M1, 0) != 0) {
+        WebTerminal::print("WARNING: M1 index initialization failed!\n\r");
+    }
+    mBoard1.setCtrlReg(DRV8711_SPI_MOTOR1, DRV8711_CTRL_DISABLE);
+
+    usleep(1000000);
+
+    mBoard1.setCtrlReg(DRV8711_SPI_MOTOR2, DRV8711_CTRL_STANDBY);
+    if (mBoard1.initializeMotorByIndex(mBoard1.M2, 1) != 0) {
+        WebTerminal::print("WARNING: M2 index initialization failed!\n\r");
+    }
+    WebTerminal::print("Motor positions after index init: M1=%d, M2=%d\n\r",
+        mBoard1.M1.readPos(), mBoard1.M2.readPos());
+    
+    WebTerminal::print("Initialization complete. Starting main loop...\n\r");
+    mBoard1.setCtrlReg(DRV8711_SPI_MOTOR2, DRV8711_CTRL_DISABLE);
+
+/*    // Example: Save first index position (for calibration)
+    // mBoard1.saveFirstIndexPos(0, indexPosM1);
+    // mBoard1.saveFirstIndexPos(1, indexPosM2);
+*/
+
+    // Main loop: check mode and execute appropriate handler
+    while (1) {
+        if (debugMode.isDebugMode()) {
+            // Debug mode: run command loop
+            debugMode.runCommandLoop();
+        } else {
+            // Auto matching mode: run auto matching
+            autoMatchingMode.AutoMatchStart();
+            usleep(100000);  // Wait 0.1 second
+        }
+    }
+
+    return XST_SUCCESS;
+}
