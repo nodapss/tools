@@ -217,6 +217,14 @@ const VVCSerial = (function () {
                 // Motor Position Both: MPB,pos0,percent0,cap0,pos1,percent1,cap1,EN
                 handleMotorPositionBoth(dataFields);
                 break;
+            case 'MFI':
+                // Motor Find Index: MFI,idx,found,indexPos,motorPosAtIndex,finalPos,EN
+                handleMotorFindIndex(dataFields);
+                break;
+            case 'MRW':
+                // Motor Rewind: MRW,idx,completed,finalPos,movement,EN
+                handleMotorRewind(dataFields);
+                break;
             default:
                 // Notify callback for unknown opcodes
                 if (onDataReceived) {
@@ -293,6 +301,45 @@ const VVCSerial = (function () {
 
         if (onDataReceived) {
             onDataReceived('ACK', { command, status });
+        }
+    }
+
+    /**
+     * Handle Motor Find Index response
+     */
+    function handleMotorFindIndex(fields) {
+        // Format: MFI,idx,found,indexPos,motorPosAtIndex,finalPos
+        if (fields.length < 5) return;
+
+        const motorIndex = parseInt(fields[0]);
+        const found = parseInt(fields[1]) === 1;
+        const indexPos = parseInt(fields[2]);
+        const motorPosAtIndex = parseInt(fields[3]);
+        const finalPos = parseInt(fields[4]);
+
+        const data = { motorIndex, found, indexPos, motorPosAtIndex, finalPos };
+
+        if (onDataReceived) {
+            onDataReceived('MFI', data);
+        }
+    }
+
+    /**
+     * Handle Motor Rewind response
+     */
+    function handleMotorRewind(fields) {
+        // Format: MRW,idx,completed,finalPos,movement
+        if (fields.length < 4) return;
+
+        const motorIndex = parseInt(fields[0]);
+        const completed = parseInt(fields[1]) === 1;
+        const finalPos = parseInt(fields[2]);
+        const movement = parseInt(fields[3]);
+
+        const data = { motorIndex, completed, finalPos, movement };
+
+        if (onDataReceived) {
+            onDataReceived('MRW', data);
         }
     }
 
@@ -393,6 +440,46 @@ const VVCSerial = (function () {
         return sendCommand(cmd, false);
     }
 
+    /**
+     * Rewind motor to physical limit
+     * @param {number} motorIndex - 0 or 1
+     */
+    async function motorRewind(motorIndex) {
+        const cmd = `mrw ${motorIndex}`;
+        return sendCommand(cmd, false);
+    }
+
+    /**
+     * Set override RPM for motor
+     * @param {number} motorIndex - 0 or 1
+     * @param {number} rpm - RPM value (0 to disable)
+     */
+    async function setOverrideRpm(motorIndex, rpm) {
+        const cmd = `mor ${motorIndex} ${rpm}`;
+        return sendCommand(cmd, false);
+    }
+
+    /**
+     * Find encoder index position
+     * @param {number} motorIndex - 0 or 1
+     * @param {number} targetPos - Target position to search toward
+     * @param {number} rpm - RPM for movement
+     */
+    async function findIndex(motorIndex, targetPos, rpm) {
+        const cmd = `mfi ${motorIndex} ${targetPos} ${rpm}`;
+        return sendCommand(cmd, false);
+    }
+
+    /**
+     * Save index offset to FRAM (mis command)
+     * @param {number} motorIndex - 0 or 1
+     * @param {number} offsetValue - Index position offset (indexPos - currentPos)
+     */
+    async function saveIndexOffset(motorIndex, offsetValue) {
+        const cmd = `mis ${motorIndex} ${offsetValue}`;
+        return sendCommand(cmd, false);
+    }
+
     // Public API
     return {
         isSupported,
@@ -412,7 +499,11 @@ const VVCSerial = (function () {
         motorDisable,
         motorSetOrigin,
         startPositionStream,
-        stopPositionStream
+        stopPositionStream,
+        motorRewind,
+        setOverrideRpm,
+        findIndex,
+        saveIndexOffset
     };
 })();
 

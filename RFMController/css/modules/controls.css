@@ -66,3 +66,68 @@
     color: white;
     border-color: #0066cc;
 }
+
+/* Command Group Header with Actions */
+.command-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.command-group-header h3 {
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+}
+
+.command-group-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+/* Collapse Button */
+.collapse-btn {
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 6px;
+    border-radius: 3px;
+    transition: color 0.2s, background-color 0.2s;
+    line-height: 1;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.collapse-btn:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.collapse-btn.collapsed {
+    color: #888;
+}
+
+/* Command Group Content - Collapsible */
+.command-group-content {
+    overflow: hidden;
+    max-height: 2000px;
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+    opacity: 1;
+}
+
+.command-group-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+}

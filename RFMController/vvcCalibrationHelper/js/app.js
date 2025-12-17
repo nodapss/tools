@@ -11,12 +11,14 @@
         selectedVvc: 0,
         stepInterval: 1000,
         vnaFrequency: 13.56, // MHz
+        reactanceOffset: 0, // Reactance offset in Ohms
         currentPosition: null,
         dataPoints: [], // { id, step, reactance, capacitance, selected }
         lastFittingResult: null,
         nextDataId: 1,
         positionStreamRunning: false,
-        positionStreamRate: 100 // ms
+        positionStreamRate: 100, // ms
+        lastFoundIndexPos: null // Last found encoder index position
     };
 
     // ========== Graph State ==========
@@ -81,6 +83,38 @@
             const motorData = state.selectedVvc === 0 ? data.motor0 : data.motor1;
             state.currentPosition = motorData.position;
             updatePositionDisplay();
+        } else if (opcode === 'MFI') {
+            // Motor Find Index result
+            const resultEl = document.getElementById('findIndexResult');
+            if (resultEl) {
+                if (data.found) {
+                    resultEl.textContent = `Idx=${data.indexPos} @ Pos=${data.motorPosAtIndex}`;
+                    resultEl.style.color = '#4caf50';
+                } else {
+                    resultEl.textContent = 'Not found';
+                    resultEl.style.color = '#f44336';
+                }
+            }
+            // Save index position if this is for the selected VVC
+            if (data.motorIndex === state.selectedVvc && data.found) {
+                state.lastFoundIndexPos = data.indexPos;
+                logToTerminal(`VVC${data.motorIndex}: Index found! Idx=${data.indexPos}, saved for zero point calculation`, 'info');
+            } else {
+                logToTerminal(`VVC${data.motorIndex}: Index ${data.found ? 'found' : 'NOT found'} - Idx=${data.indexPos}, Pos=${data.motorPosAtIndex}`, data.found ? 'info' : 'error');
+            }
+        } else if (opcode === 'MRW') {
+            // Motor Rewind result
+            const statusEl = document.getElementById('rewindStatus');
+            if (statusEl) {
+                if (data.completed) {
+                    statusEl.textContent = `Done (${data.finalPos})`;
+                    statusEl.style.color = '#4caf50';
+                } else {
+                    statusEl.textContent = 'Timeout';
+                    statusEl.style.color = '#f44336';
+                }
+            }
+            logToTerminal(`VVC${data.motorIndex}: Rewind ${data.completed ? 'complete' : 'timeout'} - Pos=${data.finalPos}, Moved=${data.movement}`, data.completed ? 'info' : 'error');
         }
     }
 
@@ -126,6 +160,12 @@
         document.getElementById('vnaFrequency').addEventListener('change', (e) => {
             state.vnaFrequency = parseFloat(e.target.value) || 13.56;
             updateCapacitancePreview();
+        });
+
+        document.getElementById('reactanceOffset').addEventListener('change', (e) => {
+            state.reactanceOffset = parseFloat(e.target.value) || 0;
+            updateCapacitancePreview();
+            saveToLocalStorage();
         });
 
         // Motor control
@@ -213,6 +253,123 @@
             updatePositionDisplay();
         });
 
+        // Override RPM Set (uses selected VVC)
+        document.getElementById('btnOverrideRpmSet').addEventListener('click', async () => {
+            const motor = state.selectedVvc;
+            const rpm = parseInt(document.getElementById('overrideRpmInput').value) || 0;
+            await VVCSerial.setOverrideRpm(motor, rpm);
+            if (rpm === 0) {
+                logToTerminal(`VVC${motor}: Override RPM disabled`, 'info');
+            } else {
+                logToTerminal(`VVC${motor}: Override RPM set to ${rpm}`, 'info');
+            }
+        });
+
+        // Override RPM Clear (uses selected VVC)
+        document.getElementById('btnOverrideRpmClear').addEventListener('click', async () => {
+            const motor = state.selectedVvc;
+            await VVCSerial.setOverrideRpm(motor, 0);
+            document.getElementById('overrideRpmInput').value = 0;
+            logToTerminal(`VVC${motor}: Override RPM cleared`, 'info');
+        });
+
+        // Rewind (uses selected VVC)
+        document.getElementById('btnRewind').addEventListener('click', async () => {
+            const motor = state.selectedVvc;
+            const statusEl = document.getElementById('rewindStatus');
+            if (statusEl) {
+                statusEl.textContent = 'Rewinding...';
+                statusEl.style.color = '#cca700';
+            }
+            await VVCSerial.motorRewind(motor);
+            logToTerminal(`VVC${motor}: Rewind started`, 'info');
+        });
+
+        // Find Index (uses selected VVC)
+        document.getElementById('btnFindIndex').addEventListener('click', async () => {
+            const motor = state.selectedVvc;
+            const targetPos = parseInt(document.getElementById('findIndexTarget').value) || 15000;
+            const rpm = parseInt(document.getElementById('findIndexRpm').value) || 30;
+            
+            const resultEl = document.getElementById('findIndexResult');
+            if (resultEl) {
+                resultEl.textContent = 'Searching...';
+                resultEl.style.color = '#cca700';
+            }
+            
+            await VVCSerial.findIndex(motor, targetPos, rpm);
+            logToTerminal(`VVC${motor}: Find Index -> ${targetPos} @ ${rpm} RPM`, 'info');
+        });
+
+        // Move Step UP
+        document.getElementById('btnMoveUp').addEventListener('click', async () => {
+            if (state.currentPosition === null) {
+                logToTerminal('Read position first', 'error');
+                return;
+            }
+            const stepValue = parseInt(document.getElementById('moveStepValue').value) || 1000;
+            const newPos = state.currentPosition + stepValue;
+            await VVCSerial.moveMotor(state.selectedVvc, newPos);
+            state.currentPosition = newPos;
+            updatePositionDisplay();
+            logToTerminal(`VVC${state.selectedVvc}: Move UP +${stepValue} -> ${newPos}`, 'info');
+        });
+
+        // Move Step DOWN
+        document.getElementById('btnMoveDown').addEventListener('click', async () => {
+            if (state.currentPosition === null) {
+                logToTerminal('Read position first', 'error');
+                return;
+            }
+            const stepValue = parseInt(document.getElementById('moveStepValue').value) || 1000;
+            const newPos = Math.max(0, state.currentPosition - stepValue);
+            await VVCSerial.moveMotor(state.selectedVvc, newPos);
+            state.currentPosition = newPos;
+            updatePositionDisplay();
+            logToTerminal(`VVC${state.selectedVvc}: Move DOWN -${stepValue} -> ${newPos}`, 'info');
+        });
+
+        // Confirm Zero Point (save index offset to FRAM)
+        document.getElementById('btnConfirmZero').addEventListener('click', async () => {
+            const motor = state.selectedVvc;
+            const statusEl = document.getElementById('zeroPointStatus');
+            
+            // Check if we have both index position and current position
+            if (state.lastFoundIndexPos === null) {
+                logToTerminal('Find Index first to get encoder index position', 'error');
+                if (statusEl) {
+                    statusEl.textContent = 'Error: Find Index first!';
+                    statusEl.style.color = '#f44336';
+                }
+                return;
+            }
+            
+            if (state.currentPosition === null) {
+                logToTerminal('Read position first', 'error');
+                if (statusEl) {
+                    statusEl.textContent = 'Error: Read position first!';
+                    statusEl.style.color = '#f44336';
+                }
+                return;
+            }
+            
+            // Calculate offset: indexPos - currentPos
+            // This value will be used by SetMotorOriginOnIndex on next boot
+            const offset = state.lastFoundIndexPos - state.currentPosition;
+            
+            if (!confirm(`Confirm Zero Point for VVC${motor}?\n\nCurrent Position: ${state.currentPosition}\nIndex Position: ${state.lastFoundIndexPos}\nOffset to save: ${offset}\n\nThis will set current position as 0 on next boot.`)) {
+                return;
+            }
+            
+            await VVCSerial.saveIndexOffset(motor, offset);
+            logToTerminal(`VVC${motor}: Zero Point confirmed. Offset=${offset} saved to FRAM`, 'info');
+            
+            if (statusEl) {
+                statusEl.textContent = `Saved: offset=${offset}`;
+                statusEl.style.color = '#4caf50';
+            }
+        });
+
         // Reactance input
         document.getElementById('reactanceInput').addEventListener('input', updateCapacitancePreview);
         document.getElementById('reactanceInput').addEventListener('keydown', (e) => {
@@ -277,15 +434,24 @@
     function updateCapacitancePreview() {
         const reactanceInput = document.getElementById('reactanceInput');
         const display = document.getElementById('calculatedCapacitance');
-        const X = parseFloat(reactanceInput.value);
+        const inputValue = parseFloat(reactanceInput.value);
 
-        if (isNaN(X) || X === 0) {
+        if (isNaN(inputValue) || inputValue === 0) {
             display.textContent = '-- pF';
             return;
         }
 
-        const capacitance = calculateCapacitance(X, state.vnaFrequency);
-        display.textContent = capacitance.toFixed(2) + ' pF';
+        // Apply negative sign automatically and add offset
+        // Final reactance = -inputValue + offset
+        const finalReactance = -inputValue + state.reactanceOffset;
+
+        if (finalReactance === 0) {
+            display.textContent = '-- pF';
+            return;
+        }
+
+        const capacitance = calculateCapacitance(finalReactance, state.vnaFrequency);
+        display.textContent = capacitance.toFixed(2) + ' pF (' + finalReactance.toFixed(1) + 'Ω)';
     }
 
     function calculateCapacitance(reactance, frequencyMHz) {
@@ -298,9 +464,9 @@
 
     // ========== Data Management ==========
     function recordDataPoint() {
-        const reactance = parseFloat(document.getElementById('reactanceInput').value);
+        const inputValue = parseFloat(document.getElementById('reactanceInput').value);
 
-        if (isNaN(reactance) || reactance === 0) {
+        if (isNaN(inputValue) || inputValue === 0) {
             logToTerminal('Enter a valid reactance value', 'error');
             return;
         }
@@ -310,12 +476,21 @@
             return;
         }
 
-        const capacitance = calculateCapacitance(reactance, state.vnaFrequency);
+        // Apply negative sign automatically and add offset
+        // Final reactance = -inputValue + offset
+        const finalReactance = -inputValue + state.reactanceOffset;
+
+        if (finalReactance === 0) {
+            logToTerminal('Final reactance cannot be zero', 'error');
+            return;
+        }
+
+        const capacitance = calculateCapacitance(finalReactance, state.vnaFrequency);
 
         const dataPoint = {
             id: state.nextDataId++,
             step: state.currentPosition,
-            reactance: reactance,
+            reactance: finalReactance,
             capacitance: capacitance,
             selected: true // Auto-select new points
         };
@@ -329,7 +504,7 @@
         document.getElementById('reactanceInput').value = '';
         document.getElementById('calculatedCapacitance').textContent = '-- pF';
 
-        logToTerminal(`Recorded: Step=${dataPoint.step}, X=${reactance}Ω, C=${capacitance.toFixed(2)}pF`, 'info');
+        logToTerminal(`Recorded: Step=${dataPoint.step}, X=${finalReactance.toFixed(1)}Ω (input:${inputValue}, offset:${state.reactanceOffset}), C=${capacitance.toFixed(2)}pF`, 'info');
     }
 
     function updateDataTable() {
@@ -1023,7 +1198,8 @@
             nextDataId: state.nextDataId,
             selectedVvc: state.selectedVvc,
             stepInterval: state.stepInterval,
-            vnaFrequency: state.vnaFrequency
+            vnaFrequency: state.vnaFrequency,
+            reactanceOffset: state.reactanceOffset
         };
         localStorage.setItem('vvcCalibrationData', JSON.stringify(data));
     }
@@ -1038,6 +1214,7 @@
                 state.selectedVvc = data.selectedVvc ?? 0;
                 state.stepInterval = data.stepInterval || 1000;
                 state.vnaFrequency = data.vnaFrequency || 13.56;
+                state.reactanceOffset = data.reactanceOffset || 0;
 
                 // Update UI
                 document.querySelectorAll('input[name="vvcSelect"]').forEach(radio => {
@@ -1045,6 +1222,7 @@
                 });
                 document.getElementById('stepInterval').value = state.stepInterval;
                 document.getElementById('vnaFrequency').value = state.vnaFrequency;
+                document.getElementById('reactanceOffset').value = state.reactanceOffset;
             }
         } catch (e) {
             console.error('Failed to load saved data:', e);

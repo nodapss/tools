@@ -131,6 +131,9 @@
                     const inpTrace = document.getElementById('traceLength');
                     const radioPoints = document.querySelector('input[name="traceMode"][value="points"]');
                     const radioLine = document.querySelector('input[name="traceMode"][value="line"]');
+                    const chkShowVswrStart = document.getElementById('chkShowVswrStart');
+                    const chkShowVswrStop = document.getElementById('chkShowVswrStop');
+                    const chkShowVswrRestart = document.getElementById('chkShowVswrRestart');
 
                     if (chkInput) chkInput.checked = chart.settings.showInput;
                     if (chkOutput) chkOutput.checked = chart.settings.showOutput;
@@ -141,6 +144,11 @@
                     } else {
                         if (radioPoints) radioPoints.checked = true;
                     }
+                    
+                    // Load VSWR display settings
+                    if (chkShowVswrStart) chkShowVswrStart.checked = chart.settings.showVswrStart || false;
+                    if (chkShowVswrStop) chkShowVswrStop.checked = chart.settings.showVswrStop !== false;
+                    if (chkShowVswrRestart) chkShowVswrRestart.checked = chart.settings.showVswrRestart || false;
                 }
                 smithSettingsModal.style.display = 'flex';
             });
@@ -172,17 +180,28 @@
                 const chkOutput = document.getElementById('chkShowOutput');
                 const inpTrace = document.getElementById('traceLength');
                 const selectedMode = document.querySelector('input[name="traceMode"]:checked');
+                const chkShowVswrStart = document.getElementById('chkShowVswrStart');
+                const chkShowVswrStop = document.getElementById('chkShowVswrStop');
+                const chkShowVswrRestart = document.getElementById('chkShowVswrRestart');
 
                 const showInput = chkInput ? chkInput.checked : true;
                 const showOutput = chkOutput ? chkOutput.checked : false;
                 const traceLength = inpTrace ? (parseInt(inpTrace.value, 10) || 1) : 1;
                 const traceMode = selectedMode ? selectedMode.value : 'points';
+                
+                // Update VSWR display settings
+                RF.settings.vswr.showStart = chkShowVswrStart ? chkShowVswrStart.checked : false;
+                RF.settings.vswr.showStop = chkShowVswrStop ? chkShowVswrStop.checked : true;
+                RF.settings.vswr.showRestart = chkShowVswrRestart ? chkShowVswrRestart.checked : false;
 
                 RF.ui.setSmithChartSettings({
                     showInput,
                     showOutput,
                     traceLength,
-                    traceMode
+                    traceMode,
+                    showVswrStart: RF.settings.vswr.showStart,
+                    showVswrStop: RF.settings.vswr.showStop,
+                    showVswrRestart: RF.settings.vswr.showRestart
                 });
 
                 smithSettingsModal.style.display = 'none';
@@ -198,8 +217,6 @@
                 const impedanceRateInput = document.getElementById('impedanceStreamRate');
                 const viRateInput = document.getElementById('viStreamRate');
                 const motorPosRateInput = document.getElementById('motorPosStreamRate');
-                const motorPosSaveRateInput = document.getElementById('motorPosSaveRate');
-                const motorPosSaveEnabledInput = document.getElementById('motorPosSaveEnabled');
                 const impedanceAvgCountInput = document.getElementById('impedanceAvgCount');
                 const modelNameInput = document.getElementById('deviceModelName');
                 const manufactureDateInput = document.getElementById('deviceManufactureDate');
@@ -208,8 +225,6 @@
                 if (impedanceRateInput) impedanceRateInput.value = RF.settings.impedanceStreamRate || 100;
                 if (viRateInput) viRateInput.value = RF.settings.viStreamRate || 100;
                 if (motorPosRateInput) motorPosRateInput.value = RF.settings.motorPosStreamRate || 100;
-                if (motorPosSaveRateInput) motorPosSaveRateInput.value = RF.settings.motorPosSaveRate || 100;
-                if (motorPosSaveEnabledInput) motorPosSaveEnabledInput.checked = RF.settings.motorPosSaveEnabled !== false;
                 if (impedanceAvgCountInput) impedanceAvgCountInput.value = RF.settings.impedanceAvgCount || 512;
                 if (modelNameInput) modelNameInput.value = RF.settings.modelName || '';
                 if (manufactureDateInput) manufactureDateInput.value = RF.settings.manufactureDate || '';
@@ -245,10 +260,11 @@
                     .then(() => RF.core.sendCommand('rga i', { waitForResponse: true })) // RF Get Average input
                     .then(() => RF.core.sendCommand('rga o', { waitForResponse: true })) // RF Get Average output
                     .then(() => RF.core.sendCommand('msg', { waitForResponse: true })) // Motor Settings Get
+                    .then(() => RF.core.sendCommand('agv', { waitForResponse: true })) // Auto Get Vswr
                     .catch(err => {
                         RF.ui.log(`Error reading settings: ${err.message}`);
                     });
-                RF.ui.log('Sent Read Commands: dgi, rga i, rga o, msg');
+                RF.ui.log('Sent Read Commands: dgi, rga i, rga o, msg, agv');
             });
         }
 
@@ -259,8 +275,6 @@
                 const impedanceRateInput = document.getElementById('impedanceStreamRate');
                 const viRateInput = document.getElementById('viStreamRate');
                 const motorPosRateInput = document.getElementById('motorPosStreamRate');
-                const motorPosSaveRateInput = document.getElementById('motorPosSaveRate');
-                const motorPosSaveEnabledInput = document.getElementById('motorPosSaveEnabled');
                 const impedanceAvgCountInput = document.getElementById('impedanceAvgCount');
                 const modelNameInput = document.getElementById('deviceModelName');
                 const manufactureDateInput = document.getElementById('deviceManufactureDate');
@@ -274,12 +288,6 @@
                 }
                 if (motorPosRateInput) {
                     RF.settings.motorPosStreamRate = parseInt(motorPosRateInput.value) || 100;
-                }
-                if (motorPosSaveRateInput) {
-                    RF.settings.motorPosSaveRate = parseInt(motorPosSaveRateInput.value) || 100;
-                }
-                if (motorPosSaveEnabledInput) {
-                    RF.settings.motorPosSaveEnabled = motorPosSaveEnabledInput.checked;
                 }
                 if (impedanceAvgCountInput) {
                     RF.settings.impedanceAvgCount = parseInt(impedanceAvgCountInput.value) || 512;
@@ -310,19 +318,17 @@
                         });
                 }
 
-                // Send stream settings command (all rates + save settings)
+                // Send stream settings command (rates only, no save settings)
                 const impRate = RF.settings.impedanceStreamRate || 100;
                 const viRate = RF.settings.viStreamRate || 100;
                 const posStreamRate = RF.settings.motorPosStreamRate || 100;
-                const saveRate = RF.settings.motorPosSaveRate || 100;
-                const saveEnabled = RF.settings.motorPosSaveEnabled ? 1 : 0;
                 commandChain = commandChain
-                    .then(() => RF.core.sendCommand(`mss ${impRate} ${viRate} ${posStreamRate} ${saveRate} ${saveEnabled}`, { waitForAck: true }))
+                    .then(() => RF.core.sendCommand(`mss ${impRate} ${viRate} ${posStreamRate}`, { waitForAck: true }))
                     .catch(err => {
                         RF.ui.log(`Error sending stream settings: ${err.message}`);
                     });
 
-                RF.ui.log(`Controls Settings Saved: Imp=${RF.settings.impedanceStreamRate}ms, VI=${RF.settings.viStreamRate}ms, MotorPos=${RF.settings.motorPosStreamRate}ms, SaveRate=${RF.settings.motorPosSaveRate}ms (${RF.settings.motorPosSaveEnabled ? 'ON' : 'OFF'}), Avg=${RF.settings.impedanceAvgCount}`);
+                RF.ui.log(`Controls Settings Saved: Imp=${RF.settings.impedanceStreamRate}ms, VI=${RF.settings.viStreamRate}ms, MotorPos=${RF.settings.motorPosStreamRate}ms, Avg=${RF.settings.impedanceAvgCount}`);
                 controlsSettingsModal.style.display = 'none';
             });
         }
@@ -798,7 +804,7 @@
             document.getElementById('motor1StandbyVal').value = motor1Drv.standbyVal || 553;
             document.getElementById('motor1DisableVal').value = motor1Drv.disableVal || 552;
             document.getElementById('motor1RegCtrl').value = motor1Drv.regCtrl || 552;
-            document.getElementById('motor1RegTorque').value = motor1Drv.regTorque || 384;
+            document.getElementById('motor1RegTorque').value = motor1Drv.regTorque || 320;
             document.getElementById('motor1RegOff').value = motor1Drv.regOff || 15;
             document.getElementById('motor1RegBlank').value = motor1Drv.regBlank || 336;
             document.getElementById('motor1RegDecay').value = motor1Drv.regDecay || 508;
@@ -810,7 +816,7 @@
             document.getElementById('motor2StandbyVal').value = motor2Drv.standbyVal || 553;
             document.getElementById('motor2DisableVal').value = motor2Drv.disableVal || 552;
             document.getElementById('motor2RegCtrl').value = motor2Drv.regCtrl || 552;
-            document.getElementById('motor2RegTorque').value = motor2Drv.regTorque || 384;
+            document.getElementById('motor2RegTorque').value = motor2Drv.regTorque || 320;
             document.getElementById('motor2RegOff').value = motor2Drv.regOff || 15;
             document.getElementById('motor2RegBlank').value = motor2Drv.regBlank || 336;
             document.getElementById('motor2RegDecay').value = motor2Drv.regDecay || 508;
@@ -873,7 +879,7 @@
                 RF.settings.motor1Drv.standbyVal = parseInt(document.getElementById('motor1StandbyVal').value) || 553;
                 RF.settings.motor1Drv.disableVal = parseInt(document.getElementById('motor1DisableVal').value) || 552;
                 RF.settings.motor1Drv.regCtrl = parseInt(document.getElementById('motor1RegCtrl').value) || 552;
-                RF.settings.motor1Drv.regTorque = parseInt(document.getElementById('motor1RegTorque').value) || 384;
+                RF.settings.motor1Drv.regTorque = parseInt(document.getElementById('motor1RegTorque').value) || 320;
                 RF.settings.motor1Drv.regOff = parseInt(document.getElementById('motor1RegOff').value) || 15;
                 RF.settings.motor1Drv.regBlank = parseInt(document.getElementById('motor1RegBlank').value) || 336;
                 RF.settings.motor1Drv.regDecay = parseInt(document.getElementById('motor1RegDecay').value) || 508;
@@ -885,7 +891,7 @@
                 RF.settings.motor2Drv.standbyVal = parseInt(document.getElementById('motor2StandbyVal').value) || 553;
                 RF.settings.motor2Drv.disableVal = parseInt(document.getElementById('motor2DisableVal').value) || 552;
                 RF.settings.motor2Drv.regCtrl = parseInt(document.getElementById('motor2RegCtrl').value) || 552;
-                RF.settings.motor2Drv.regTorque = parseInt(document.getElementById('motor2RegTorque').value) || 384;
+                RF.settings.motor2Drv.regTorque = parseInt(document.getElementById('motor2RegTorque').value) || 320;
                 RF.settings.motor2Drv.regOff = parseInt(document.getElementById('motor2RegOff').value) || 15;
                 RF.settings.motor2Drv.regBlank = parseInt(document.getElementById('motor2RegBlank').value) || 336;
                 RF.settings.motor2Drv.regDecay = parseInt(document.getElementById('motor2RegDecay').value) || 508;
@@ -1003,6 +1009,99 @@
                 }
             });
         });
+
+        // Set Origin on Index Buttons (arm origin setting for next index signal)
+        document.querySelectorAll('.origin-index-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const motor = btn.dataset.motor;
+                if (confirm(`ARM M${motor} Origin on Index?\nOrigin will be set to 0 when next encoder index signal is detected.`)) {
+                    RF.core.sendCommand(`moi ${motor} 0`);
+                    RF.ui.log(`Origin on Index: M${motor} armed`);
+                }
+            });
+        });
+
+        // Override RPM Set Button
+        const btnOverrideRpmSet = document.getElementById('btnOverrideRpmSet');
+        if (btnOverrideRpmSet) {
+            btnOverrideRpmSet.addEventListener('click', () => {
+                const motorSelect = document.getElementById('motorOverrideSelect');
+                const rpmInput = document.getElementById('motorOverrideRpm');
+                if (motorSelect && rpmInput) {
+                    const motor = motorSelect.value;
+                    const rpm = parseInt(rpmInput.value) || 0;
+                    RF.core.sendCommand(`mor ${motor} ${rpm}`);
+                    if (rpm === 0) {
+                        RF.ui.log(`Override RPM: M${motor} disabled`);
+                    } else {
+                        RF.ui.log(`Override RPM: M${motor} set to ${rpm}`);
+                    }
+                }
+            });
+        }
+
+        // Override RPM Clear Button
+        const btnOverrideRpmClear = document.getElementById('btnOverrideRpmClear');
+        if (btnOverrideRpmClear) {
+            btnOverrideRpmClear.addEventListener('click', () => {
+                const motorSelect = document.getElementById('motorOverrideSelect');
+                if (motorSelect) {
+                    const motor = motorSelect.value;
+                    RF.core.sendCommand(`mor ${motor} 0`);
+                    const rpmInput = document.getElementById('motorOverrideRpm');
+                    if (rpmInput) rpmInput.value = 0;
+                    RF.ui.log(`Override RPM: M${motor} cleared`);
+                }
+            });
+        }
+
+        // Find Index Button
+        const btnFindIndex = document.getElementById('btnFindIndex');
+        if (btnFindIndex) {
+            btnFindIndex.addEventListener('click', () => {
+                const motorSelect = document.getElementById('findIndexMotorSelect');
+                const targetPosInput = document.getElementById('findIndexTargetPos');
+                const rpmInput = document.getElementById('findIndexRpm');
+                
+                if (motorSelect && targetPosInput && rpmInput) {
+                    const motor = motorSelect.value;
+                    const targetPos = parseInt(targetPosInput.value) || 32000;
+                    const rpm = parseInt(rpmInput.value) || 30;
+                    
+                    // Update result display to show searching
+                    const resultEl = document.getElementById(`findIndexResult${parseInt(motor) + 1}`);
+                    if (resultEl) {
+                        resultEl.textContent = 'Searching...';
+                        resultEl.style.color = '#cca700';  // Yellow
+                    }
+                    
+                    RF.core.sendCommand(`mfi ${motor} ${targetPos} ${rpm}`);
+                    RF.ui.log(`Find Index: M${motor} -> ${targetPos} @ ${rpm} RPM`);
+                }
+            });
+        }
+
+        // Rewind Button (rewind motor to physical limit)
+        const btnRewind = document.getElementById('btnRewind');
+        if (btnRewind) {
+            btnRewind.addEventListener('click', () => {
+                const motorSelect = document.getElementById('rewindMotorSelect');
+                
+                if (motorSelect) {
+                    const motor = motorSelect.value;
+                    
+                    // Update result display to show rewinding
+                    const resultEl = document.getElementById(`rewindResult${parseInt(motor) + 1}`);
+                    if (resultEl) {
+                        resultEl.textContent = 'Rewinding...';
+                        resultEl.style.color = '#cca700';  // Yellow
+                    }
+                    
+                    RF.core.sendCommand(`mrw ${motor}`);
+                    RF.ui.log(`Rewind: M${motor} to physical limit`);
+                }
+            });
+        }
 
         // Motor Position Run Button (streams both motors position)
         const btnMotorPosRun = document.getElementById('btnMotorPosRun');
@@ -1402,6 +1501,391 @@
 
         // Initial Resize
         setTimeout(RF.ui.resizeGraphs, 100);
+
+        // ===== Collapse/Expand Section Handlers =====
+        function setupCollapseHandler(buttonId, contentId) {
+            const btn = document.getElementById(buttonId);
+            const content = document.getElementById(contentId);
+            if (btn && content) {
+                btn.addEventListener('click', () => {
+                    const isCollapsed = content.classList.contains('collapsed');
+                    if (isCollapsed) {
+                        content.classList.remove('collapsed');
+                        btn.textContent = '−';
+                        btn.classList.remove('collapsed');
+                        btn.title = 'Collapse';
+                    } else {
+                        content.classList.add('collapsed');
+                        btn.textContent = '+';
+                        btn.classList.add('collapsed');
+                        btn.title = 'Expand';
+                    }
+                });
+            }
+        }
+
+        // Setup collapse handlers for each section
+        setupCollapseHandler('btnMatchingCollapse', 'matchingAlgorithmContent');
+        setupCollapseHandler('btnInputSensorCollapse', 'inputSensorContent');
+        setupCollapseHandler('btnOutputSensorCollapse', 'outputSensorContent');
+        setupCollapseHandler('btnMotorCollapse', 'motorContent');
+
+        // ===== Matching Algorithm Command Buttons =====
+        // Helper to get current impedance R, X from matching input fields
+        // Priority: matchingInputR/X (user input) > valRIn/valXIn (Input Sensor measured)
+        function getCurrentImpedanceRX() {
+            const matchingR = document.getElementById('matchingInputR');
+            const matchingX = document.getElementById('matchingInputX');
+            
+            // First try to get from matching input fields (user input)
+            let r = matchingR ? parseFloat(matchingR.value) : NaN;
+            let x = matchingX ? parseFloat(matchingX.value) : NaN;
+            
+            // If matching input is empty/invalid, fall back to Input Sensor measured values
+            if (isNaN(r) || isNaN(x)) {
+                const valRIn = document.getElementById('valRIn');
+                const valXIn = document.getElementById('valXIn');
+                r = valRIn ? parseFloat(valRIn.textContent) : NaN;
+                x = valXIn ? parseFloat(valXIn.textContent) : NaN;
+            }
+            
+            return { r, x, valid: !isNaN(r) && !isNaN(x) };
+        }
+        
+        // Helper to get current output sensor R, X from matching output fields
+        // Priority: matchingOutputR/X (user input) > valROut/valXOut (Output Sensor measured)
+        function getOutputImpedanceRX() {
+            const matchingR = document.getElementById('matchingOutputR');
+            const matchingX = document.getElementById('matchingOutputX');
+            
+            // First try to get from matching output fields (user input)
+            let r = matchingR ? parseFloat(matchingR.value) : NaN;
+            let x = matchingX ? parseFloat(matchingX.value) : NaN;
+            
+            // If matching output is empty/invalid, fall back to Output Sensor measured values
+            if (isNaN(r) || isNaN(x)) {
+                const valROut = document.getElementById('valROut');
+                const valXOut = document.getElementById('valXOut');
+                r = valROut ? parseFloat(valROut.textContent) : NaN;
+                x = valXOut ? parseFloat(valXOut.textContent) : NaN;
+            }
+            
+            return { r, x, valid: !isNaN(r) && !isNaN(x) };
+        }
+        
+        // Export getOutputImpedanceRX to RF namespace for external use
+        RF.ui.getOutputImpedanceRX = getOutputImpedanceRX;
+
+
+        // AMC button - Calculate impedance points
+        const btnAmcCalc = document.getElementById('btnAmcCalc');
+        if (btnAmcCalc) {
+            btnAmcCalc.addEventListener('click', () => {
+                const { r, x, valid } = getCurrentImpedanceRX();
+                if (!valid) {
+                    RF.ui.log('AMC: No valid impedance data. Run impedance stream first.');
+                    return;
+                }
+                
+                // Get output sensor values (optional)
+                const output = getOutputImpedanceRX();
+                let cmd = `amc ${r.toFixed(2)} ${x.toFixed(2)}`;
+                if (output.valid) {
+                    cmd += ` ${output.r.toFixed(2)} ${output.x.toFixed(2)}`;
+                }
+                
+                RF.core.sendCommand(cmd);
+                RF.ui.log(`> ${cmd}`);
+            });
+        }
+
+        // AMG button - Calculate VVC goals
+        const btnAmgGoals = document.getElementById('btnAmgGoals');
+        if (btnAmgGoals) {
+            btnAmgGoals.addEventListener('click', () => {
+                const { r, x, valid } = getCurrentImpedanceRX();
+                if (!valid) {
+                    RF.ui.log('AMG: No valid impedance data. Run impedance stream first.');
+                    return;
+                }
+                
+                // Get output sensor values (optional)
+                const output = getOutputImpedanceRX();
+                let cmd = `amg ${r.toFixed(2)} ${x.toFixed(2)}`;
+                if (output.valid) {
+                    cmd += ` ${output.r.toFixed(2)} ${output.x.toFixed(2)}`;
+                }
+                
+                RF.core.sendCommand(cmd);
+                RF.ui.log(`> ${cmd}`);
+            });
+        }
+
+        // AMR button - Calculate and run matching
+        const btnAmrRun = document.getElementById('btnAmrRun');
+        if (btnAmrRun) {
+            btnAmrRun.addEventListener('click', () => {
+                const { r, x, valid } = getCurrentImpedanceRX();
+                if (!valid) {
+                    RF.ui.log('AMR: No valid impedance data. Run impedance stream first.');
+                    return;
+                }
+                
+                // Get output sensor values (optional)
+                const output = getOutputImpedanceRX();
+                let cmd = `amr ${r.toFixed(2)} ${x.toFixed(2)}`;
+                if (output.valid) {
+                    cmd += ` ${output.r.toFixed(2)} ${output.x.toFixed(2)}`;
+                }
+                
+                RF.core.sendCommand(cmd);
+                RF.ui.log(`> ${cmd}`);
+            });
+        }
+
+        // AMS button - Auto matching using internal sensors
+        const btnAmsAuto = document.getElementById('btnAmsAuto');
+        if (btnAmsAuto) {
+            // Track AMS running state: 'idle', 'matching', 'monitoring'
+            let amsState = 'idle';
+            
+            // Button colors
+            const AMS_COLORS = {
+                idle: '#2d7d46',       // Green - Ready to start
+                matching: '#c0392b',   // Red - Matching in progress
+                monitoring: '#f39c12'  // Orange - Monitoring mode
+            };
+            
+            // Update button appearance based on state
+            const updateAmsButton = (state) => {
+                amsState = state;
+                switch (state) {
+                    case 'matching':
+                        btnAmsAuto.textContent = 'MATCHING';
+                        btnAmsAuto.style.background = AMS_COLORS.matching;
+                        break;
+                    case 'monitoring':
+                        btnAmsAuto.textContent = 'MONITOR';
+                        btnAmsAuto.style.background = AMS_COLORS.monitoring;
+                        break;
+                    case 'idle':
+                    default:
+                        btnAmsAuto.textContent = 'AMS';
+                        btnAmsAuto.style.background = AMS_COLORS.idle;
+                        break;
+                }
+            };
+            
+            btnAmsAuto.addEventListener('click', () => {
+                if (amsState !== 'idle') {
+                    // Stop AMS
+                    RF.core.sendCommand('ams stop');
+                    RF.ui.log('> ams stop');
+                    updateAmsButton('idle');
+                } else {
+                    // Start AMS with configured interval, timeout, and log interval
+                    const interval = document.getElementById('amsInterval')?.value || 10;
+                    const timeout = document.getElementById('amsTimeout')?.value || 0; // Default: no timeout (continuous)
+                    const logInterval = document.getElementById('amsLogInterval')?.value || 10;
+                    const cmd = `ams ${interval} ${timeout} ${logInterval}`;
+                    RF.core.sendCommand(cmd);
+                    RF.ui.log(`> ${cmd}`);
+                    updateAmsButton('matching');  // Start in matching mode
+                }
+            });
+            
+            // Listen for AMS status messages
+            if (typeof RF !== 'undefined' && RF.events) {
+                // AMS stopped (from ACK or timeout)
+                RF.events.on('ams_complete', () => {
+                    updateAmsButton('idle');
+                });
+                
+                // AMS matched - transition to monitoring mode
+                RF.events.on('ams_matched', (data) => {
+                    updateAmsButton('monitoring');
+                    RF.ui.log(`AMS: MATCHED (VSWR=${data.vswr?.toFixed(3) || 'N/A'})`);
+                });
+                
+                // AMS restart - transition to matching mode
+                RF.events.on('ams_restart', (data) => {
+                    updateAmsButton('matching');
+                    RF.ui.log(`AMS: RESTART (VSWR=${data.vswr?.toFixed(3) || 'N/A'})`);
+                });
+            }
+        }
+
+        // ===== Matching Algorithm Settings Modal =====
+        const btnMatchingSettings = document.getElementById('btnMatchingSettings');
+        const matchingSettingsModal = document.getElementById('matchingSettingsModal');
+        if (btnMatchingSettings && matchingSettingsModal) {
+            btnMatchingSettings.addEventListener('click', () => {
+                // Load current VSWR values into modal
+                const vswrStartInput = document.getElementById('vswrStart');
+                const vswrStopInput = document.getElementById('vswrStop');
+                const vswrRestartInput = document.getElementById('vswrRestart');
+                
+                if (vswrStartInput) vswrStartInput.value = RF.settings.vswr?.start || 1.04;
+                if (vswrStopInput) vswrStopInput.value = RF.settings.vswr?.stop || 1.02;
+                if (vswrRestartInput) vswrRestartInput.value = RF.settings.vswr?.restart || 1.04;
+                
+                matchingSettingsModal.style.display = 'flex';
+            });
+            
+            const btnCloseMatchingSettings = document.getElementById('btnCloseMatchingSettings');
+            const btnCancelMatchingSettings = document.getElementById('btnCancelMatchingSettings');
+            const btnSaveMatchingSettings = document.getElementById('btnSaveMatchingSettings');
+            const btnReadMatchingSettings = document.getElementById('btnReadMatchingSettings');
+            
+            if (btnCloseMatchingSettings) {
+                btnCloseMatchingSettings.addEventListener('click', () => {
+                    matchingSettingsModal.style.display = 'none';
+                });
+            }
+            if (btnCancelMatchingSettings) {
+                btnCancelMatchingSettings.addEventListener('click', () => {
+                    matchingSettingsModal.style.display = 'none';
+                });
+            }
+            if (btnReadMatchingSettings) {
+                btnReadMatchingSettings.addEventListener('click', () => {
+                    // Read VSWR settings from firmware
+                    RF.core.sendCommand('agv', { waitForAck: true })
+                        .catch(err => {
+                            RF.ui.log(`Error reading VSWR settings: ${err.message}`);
+                        });
+                    
+                    // Read AMS settings from firmware
+                    RF.core.sendCommand('ags', { waitForAck: true })
+                        .catch(err => {
+                            RF.ui.log(`Error reading AMS settings: ${err.message}`);
+                        });
+                    
+                    RF.ui.log('Reading settings from firmware...');
+                });
+            }
+            if (btnSaveMatchingSettings) {
+                btnSaveMatchingSettings.addEventListener('click', () => {
+                    // Get VSWR threshold values
+                    const vswrStartInput = document.getElementById('vswrStart');
+                    const vswrStopInput = document.getElementById('vswrStop');
+                    const vswrRestartInput = document.getElementById('vswrRestart');
+                    
+                    // Get AMS settings
+                    const amsIntervalInput = document.getElementById('amsInterval');
+                    const amsTimeoutInput = document.getElementById('amsTimeout');
+                    const amsLogIntervalInput = document.getElementById('amsLogInterval');
+                    
+                    // Update RF.settings - VSWR
+                    if (vswrStartInput) RF.settings.vswr.start = parseFloat(vswrStartInput.value) || 1.04;
+                    if (vswrStopInput) RF.settings.vswr.stop = parseFloat(vswrStopInput.value) || 1.02;
+                    if (vswrRestartInput) RF.settings.vswr.restart = parseFloat(vswrRestartInput.value) || 1.04;
+                    
+                    // Update RF.settings - AMS
+                    if (!RF.settings.ams) RF.settings.ams = {};
+                    if (amsIntervalInput) RF.settings.ams.interval = parseInt(amsIntervalInput.value) || 10;
+                    if (amsTimeoutInput) RF.settings.ams.timeout = parseInt(amsTimeoutInput.value) || 0;
+                    if (amsLogIntervalInput) RF.settings.ams.logInterval = parseInt(amsLogIntervalInput.value) || 10;
+                    
+                    // Send VSWR settings to firmware (saves to FRAM)
+                    const vswrStart = RF.settings.vswr.start;
+                    const vswrStop = RF.settings.vswr.stop;
+                    const vswrRestart = RF.settings.vswr.restart;
+                    RF.core.sendCommand(`asv ${vswrStart} ${vswrStop} ${vswrRestart}`, { waitForAck: true })
+                        .catch(err => {
+                            RF.ui.log(`Error sending VSWR settings: ${err.message}`);
+                        });
+                    
+                    // Send AMS settings to firmware (saves to FRAM)
+                    const amsInterval = RF.settings.ams.interval;
+                    const amsTimeout = RF.settings.ams.timeout;
+                    const amsLogInterval = RF.settings.ams.logInterval;
+                    RF.core.sendCommand(`ass ${amsInterval} ${amsTimeout} ${amsLogInterval}`, { waitForAck: true })
+                        .catch(err => {
+                            RF.ui.log(`Error sending AMS settings: ${err.message}`);
+                        });
+                    
+                    // Update Smith Chart VSWR values (display settings are in Smith Chart Settings)
+                    if (typeof RF.ui.setSmithChartSettings === 'function') {
+                        RF.ui.setSmithChartSettings({
+                            vswrStart: vswrStart,
+                            vswrStop: vswrStop,
+                            vswrRestart: vswrRestart
+                        });
+                    }
+                    
+                    RF.ui.log(`Settings Saved - VSWR: Start=${vswrStart}, Stop=${vswrStop}, Restart=${vswrRestart}`);
+                    RF.ui.log(`Settings Saved - AMS: Interval=${amsInterval}, Timeout=${amsTimeout}, LogInterval=${amsLogInterval}`);
+                    matchingSettingsModal.style.display = 'none';
+                });
+            }
+            
+            setupModalCloseHandler(matchingSettingsModal);
+        }
+
+        // ===== Input Sensor Settings Modal =====
+        const btnInputSensorSettings = document.getElementById('btnInputSensorSettings');
+        const inputSensorSettingsModal = document.getElementById('inputSensorSettingsModal');
+        if (btnInputSensorSettings && inputSensorSettingsModal) {
+            btnInputSensorSettings.addEventListener('click', () => {
+                inputSensorSettingsModal.style.display = 'flex';
+            });
+            
+            const btnCloseInputSensorSettings = document.getElementById('btnCloseInputSensorSettings');
+            const btnCancelInputSensorSettings = document.getElementById('btnCancelInputSensorSettings');
+            const btnSaveInputSensorSettings = document.getElementById('btnSaveInputSensorSettings');
+            
+            if (btnCloseInputSensorSettings) {
+                btnCloseInputSensorSettings.addEventListener('click', () => {
+                    inputSensorSettingsModal.style.display = 'none';
+                });
+            }
+            if (btnCancelInputSensorSettings) {
+                btnCancelInputSensorSettings.addEventListener('click', () => {
+                    inputSensorSettingsModal.style.display = 'none';
+                });
+            }
+            if (btnSaveInputSensorSettings) {
+                btnSaveInputSensorSettings.addEventListener('click', () => {
+                    RF.ui.log('Input Sensor settings saved');
+                    inputSensorSettingsModal.style.display = 'none';
+                });
+            }
+            
+            setupModalCloseHandler(inputSensorSettingsModal);
+        }
+
+        // ===== Output Sensor Settings Modal =====
+        const btnOutputSensorSettings = document.getElementById('btnOutputSensorSettings');
+        const outputSensorSettingsModal = document.getElementById('outputSensorSettingsModal');
+        if (btnOutputSensorSettings && outputSensorSettingsModal) {
+            btnOutputSensorSettings.addEventListener('click', () => {
+                outputSensorSettingsModal.style.display = 'flex';
+            });
+            
+            const btnCloseOutputSensorSettings = document.getElementById('btnCloseOutputSensorSettings');
+            const btnCancelOutputSensorSettings = document.getElementById('btnCancelOutputSensorSettings');
+            const btnSaveOutputSensorSettings = document.getElementById('btnSaveOutputSensorSettings');
+            
+            if (btnCloseOutputSensorSettings) {
+                btnCloseOutputSensorSettings.addEventListener('click', () => {
+                    outputSensorSettingsModal.style.display = 'none';
+                });
+            }
+            if (btnCancelOutputSensorSettings) {
+                btnCancelOutputSensorSettings.addEventListener('click', () => {
+                    outputSensorSettingsModal.style.display = 'none';
+                });
+            }
+            if (btnSaveOutputSensorSettings) {
+                btnSaveOutputSensorSettings.addEventListener('click', () => {
+                    RF.ui.log('Output Sensor settings saved');
+                    outputSensorSettingsModal.style.display = 'none';
+                });
+            }
+            
+            setupModalCloseHandler(outputSensorSettingsModal);
+        }
     });
 
     function sendManualCommand() {

@@ -6,25 +6,25 @@
         "opcodes": {
             "ZI": {
                 "name": "Input Impedance",
-                "description": "Input sensor impedance measurement",
-                "fields": ["magnitude", "phase"],
+                "description": "Input sensor impedance measurement (R, X, V, I, Phase)",
+                "fields": ["R", "X", "V", "I", "Phase"],
                 "handler": "handleInputImpedance"
             },
             "ZO": {
                 "name": "Output Impedance",
-                "description": "Output sensor impedance measurement",
-                "fields": ["magnitude", "phase"],
+                "description": "Output sensor impedance measurement (R, X, V, I, Phase)",
+                "fields": ["R", "X", "V", "I", "Phase"],
                 "handler": "handleOutputImpedance"
             },
             "FI": {
                 "name": "FFT Input",
-                "description": "FFT magnitude data for input sensor",
+                "description": "FFT magnitude data for input sensor (V, I interleaved)",
                 "fields": ["*array"],
                 "handler": "handleFftInput"
             },
             "FO": {
                 "name": "FFT Output",
-                "description": "FFT magnitude data for output sensor (Voltage)",
+                "description": "FFT magnitude data for output sensor (V, I interleaved)",
                 "fields": ["*array"],
                 "handler": "handleFftOutput"
             },
@@ -114,8 +114,8 @@
             },
             "MST": {
                 "name": "Motor Settings",
-                "description": "Motor settings (position stream rate, FRAM save rate, save enabled)",
-                "fields": ["posStreamRate", "saveRate", "saveEnabled"],
+                "description": "Motor settings (position stream rate)",
+                "fields": ["posStreamRate"],
                 "handler": "handleMotorSettings"
             },
             "SST": {
@@ -129,6 +129,42 @@
                 "description": "Cubic fitting coefficients for capacitance calculation (a0, a1, a2, a3)",
                 "fields": ["motorIndex", "a0", "a1", "a2", "a3"],
                 "handler": "handleMotorFittingCoeffs"
+            },
+            "MXI": {
+                "name": "Motor Extended Info",
+                "description": "Motor encoder index position and stall detection status",
+                "fields": ["motorIndex", "indexPos", "stallDetected"],
+                "handler": "handleMotorExtendedInfo"
+            },
+            "MFI": {
+                "name": "Motor Find Index",
+                "description": "Index position search result",
+                "fields": ["motorIndex", "found", "indexPos", "motorPosAtIndex", "finalPos"],
+                "handler": "handleMotorFindIndex"
+            },
+            "MRW": {
+                "name": "Motor Rewind",
+                "description": "Motor rewind to physical limit result",
+                "fields": ["motorIndex", "completed", "finalPos", "movement"],
+                "handler": "handleMotorRewind"
+            },
+            "VSW": {
+                "name": "VSWR Settings",
+                "description": "VSWR matching thresholds (start, stop, restart)",
+                "fields": ["start", "stop", "restart"],
+                "handler": "handleVswrSettings"
+            },
+            "AMS": {
+                "name": "AMS Status",
+                "description": "Auto Matching with Sensor status (status, vswr)",
+                "fields": ["status", "vswr"],
+                "handler": "handleAmsStatus"
+            },
+            "AST": {
+                "name": "AMS Settings",
+                "description": "AMS matching settings (interval, timeout, logInterval)",
+                "fields": ["interval", "timeout", "logInterval"],
+                "handler": "handleAmsSettings"
             }
         },
         "endMarker": "EN",
@@ -201,23 +237,34 @@
     // Handler functions for different OpCodes
     const handlers = {
         handleInputImpedance: function (fields, config) {
-            if (fields.length !== 2) {
-                console.error('ZI: Expected 2 fields (magnitude, phase), got', fields.length);
+            // New format: R, X, V, I, Phase (5 fields)
+            if (fields.length !== 5) {
+                console.error('ZI: Expected 5 fields (R, X, V, I, Phase), got', fields.length);
                 return;
             }
 
-            const magnitude = parseFloat(fields[0]);
-            const phase = parseFloat(fields[1]);
+            const R = parseFloat(fields[0]);
+            const X = parseFloat(fields[1]);
+            const V = parseFloat(fields[2]);
+            const I = parseFloat(fields[3]);
+            const phase = parseFloat(fields[4]);
 
-            if (isNaN(magnitude) || isNaN(phase)) {
+            if (isNaN(R) || isNaN(X) || isNaN(V) || isNaN(I) || isNaN(phase)) {
                 console.error('ZI: Invalid numeric values', fields);
                 return;
             }
+
+            // Calculate magnitude from R and X for Smith Chart compatibility
+            const magnitude = Math.sqrt(R * R + X * X);
 
             // Update Smith Chart with input impedance
             const impData = {
                 zMag: magnitude,
                 zPhase: phase,
+                R: R,
+                X: X,
+                V: V,
+                I: I,
                 isInput: true
             };
 
@@ -225,23 +272,34 @@
         },
 
         handleOutputImpedance: function (fields, config) {
-            if (fields.length !== 2) {
-                console.error('ZO: Expected 2 fields (magnitude, phase), got', fields.length);
+            // New format: R, X, V, I, Phase (5 fields)
+            if (fields.length !== 5) {
+                console.error('ZO: Expected 5 fields (R, X, V, I, Phase), got', fields.length);
                 return;
             }
 
-            const magnitude = parseFloat(fields[0]);
-            const phase = parseFloat(fields[1]);
+            const R = parseFloat(fields[0]);
+            const X = parseFloat(fields[1]);
+            const V = parseFloat(fields[2]);
+            const I = parseFloat(fields[3]);
+            const phase = parseFloat(fields[4]);
 
-            if (isNaN(magnitude) || isNaN(phase)) {
+            if (isNaN(R) || isNaN(X) || isNaN(V) || isNaN(I) || isNaN(phase)) {
                 console.error('ZO: Invalid numeric values', fields);
                 return;
             }
+
+            // Calculate magnitude from R and X for Smith Chart compatibility
+            const magnitude = Math.sqrt(R * R + X * X);
 
             // Update Smith Chart with output impedance
             const impData = {
                 zMag: magnitude,
                 zPhase: phase,
+                R: R,
+                X: X,
+                V: V,
+                I: I,
                 isInput: false
             };
 
@@ -262,23 +320,53 @@
 
         handleFftInput: function (fields, config) {
             console.log('FFT Input data received:', fields.length, 'values');
-            // Parse FFT data array
-            const fftData = fields.map(v => parseFloat(v));
+            // Parse FFT data array (Interleaved V, I)
+            const rawData = fields.map(v => parseFloat(v));
 
-            // Update FFT graph for input sensor
+            // De-interleave Voltage and Current
+            const vData = [];
+            const iData = [];
+            for (let k = 0; k < rawData.length; k += 2) {
+                vData.push(rawData[k]); // Even index = Voltage
+                if (k + 1 < rawData.length) {
+                    iData.push(rawData[k + 1]); // Odd index = Current
+                }
+            }
+
+            // Update FFT graph for input sensor (Voltage)
             if (typeof RF.ui.updateFftGraph === 'function') {
-                RF.ui.updateFftGraph('input', fftData);
+                RF.ui.updateFftGraph('input', vData);
+            }
+
+            // Update FFT graph for input sensor (Current)
+            if (typeof RF.ui.updateFftGraphCurrent === 'function') {
+                RF.ui.updateFftGraphCurrent('input', iData);
             }
         },
 
         handleFftOutput: function (fields, config) {
-            console.log('FFT Output (Voltage) data received:', fields.length, 'values');
-            // Parse FFT data array
-            const fftData = fields.map(v => parseFloat(v));
+            console.log('FFT Output data received:', fields.length, 'values');
+            // Parse FFT data array (Interleaved V, I)
+            const rawData = fields.map(v => parseFloat(v));
+
+            // De-interleave Voltage and Current
+            const vData = [];
+            const iData = [];
+            for (let k = 0; k < rawData.length; k += 2) {
+                vData.push(rawData[k]); // Even index = Voltage
+                if (k + 1 < rawData.length) {
+                    iData.push(rawData[k + 1]); // Odd index = Current
+                }
+            }
 
             // Update FFT graph for output sensor (Voltage)
             if (typeof RF.ui.updateFftGraph === 'function') {
-                RF.ui.updateFftGraph('output', fftData);
+                RF.ui.updateFftGraph('output', vData);
+            }
+
+            // Update FFT graph for output sensor (Current)
+            if (typeof RF.ui.updateFftGraphCurrent === 'function') {
+                RF.ui.updateFftGraphCurrent('output', iData);
             }
         },
 
@@ -349,7 +437,7 @@
                 const command = fields[0];
                 const status = fields[1];
                 console.log(`ACK: ${command} - ${status}`);
-                
+
                 // Resolve pending response promise if waiting
                 if (typeof RF.core.resolveResponse === 'function') {
                     RF.core.resolveResponse('ACK', command, { status: status });
@@ -357,10 +445,18 @@
                     // Legacy support
                     RF.core.resolveAck(command, status);
                 }
-                
+
                 // If SA command was acknowledged, log success
                 if (command === 'sa' && status === 'OK') {
                     RF.ui.log(`Average count saved successfully`);
+                }
+
+                // AMS completion - emit event to reset button state
+                if (command === 'ams' && (status === 'SUCCESS' || status === 'TIMEOUT' || status === 'STOP')) {
+                    RF.ui.log(`AMS: ${status}`);
+                    if (typeof RF.events !== 'undefined' && typeof RF.events.emit === 'function') {
+                        RF.events.emit('ams_complete', { status: status });
+                    }
                 }
                 // Could show a toast notification or update UI status
             }
@@ -397,7 +493,7 @@
             } else {
                 console.warn('RGC: Unknown channel', channel);
             }
-            
+
             // Resolve pending response promise if waiting (RGC = RF Get Calibration)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('RGC', channel, { channel, vGain, iGain, phaseDeg });
@@ -427,7 +523,7 @@
             if (document.getElementById('deviceSerialNumber')) document.getElementById('deviceSerialNumber').value = serial;
 
             console.log('Updated Device Info UI:', model, date, serial);
-            
+
             // Resolve pending response promise if waiting (DGI = Device Get Info)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('DGI', null, { model, date, serial });
@@ -467,7 +563,7 @@
                 console.error('MGL: Invalid numeric values', fields);
                 return;
             }
-            
+
             // Resolve pending response promise if waiting (MGL = Motor Get Limits)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('MGL', motorIndex.toString(), {
@@ -490,11 +586,11 @@
                 const motorNum = motorIndex + 1;  // Convert index to 1-based for UI
                 const motorKey = `motor${motorNum}`;
                 const vvcKey = `vvc${motorNum}`;
-                
+
                 // Initialize settings objects if needed
                 if (!RF.settings[motorKey]) RF.settings[motorKey] = {};
                 if (!RF.settings[vvcKey]) RF.settings[vvcKey] = {};
-                
+
                 // Update settings (including capacitance)
                 RF.settings[motorKey].minValue = minVal;
                 RF.settings[motorKey].maxValue = maxVal;
@@ -502,7 +598,7 @@
                 RF.settings[motorKey].upperLimit = upperLimitVal;
                 RF.settings[motorKey].position = positionVal;
                 RF.settings[motorKey].percent = percentVal;
-                
+
                 RF.settings[vvcKey].minValue = minVal;
                 RF.settings[vvcKey].maxValue = maxVal;
                 RF.settings[vvcKey].lowerLimit = lowerLimitVal;
@@ -517,36 +613,36 @@
                 // Update UI fields (only if elements exist)
                 const motorFields = ['MinValue', 'MaxValue', 'LowerLimit', 'UpperLimit'];
                 const values = [minVal, maxVal, lowerLimitVal, upperLimitVal];
-                
+
                 motorFields.forEach((field, i) => {
                     const motorEl = document.getElementById(`motor${motorNum}${field}`);
                     const vvcEl = document.getElementById(`vvc${motorNum}${field}`);
                     if (motorEl) motorEl.value = values[i];
                     if (vvcEl) vvcEl.value = values[i];
                 });
-                
+
                 // Update capacitance fields
                 const vvcMinCapEl = document.getElementById(`vvc${motorNum}MinCap`);
                 const vvcMaxCapEl = document.getElementById(`vvc${motorNum}MaxCap`);
                 if (vvcMinCapEl) vvcMinCapEl.value = minCapVal;
                 if (vvcMaxCapEl) vvcMaxCapEl.value = maxCapVal;
-                
+
                 // Update position and percent fields (read-only)
                 const vvcCurrentEl = document.getElementById(`vvc${motorNum}CurrentValue`);
                 const vvcPercentEl = document.getElementById(`vvc${motorNum}Percent`);
                 if (vvcCurrentEl) vvcCurrentEl.value = positionVal;
                 if (vvcPercentEl) vvcPercentEl.value = percentVal;
-                
+
                 // Update VVC Position bar display
                 if (typeof RF.ui.updateVvcBar === 'function') {
                     RF.ui.updateVvcBar(motorNum, percentVal);
                 }
-                
+
                 // Update VVC value text display based on displayMode
                 if (typeof RF.ui.updateVvcDisplay === 'function') {
                     RF.ui.updateVvcDisplay(vvcKey, motorNum);
                 }
-                
+
                 console.log(`MGL: Motor ${motorNum} (idx=${motorIndex}) - Pos: ${positionVal}, ${percentVal}%, ${capacitanceVal}pF, Cap Range: ${minCapVal}~${maxCapVal}pF`);
             }
         },
@@ -578,7 +674,7 @@
             }
 
             console.log(`Updated Average Count UI: ${channel} sensor = ${count}`);
-            
+
             // Resolve pending response promise if waiting (RGA = RF Get Average)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('RGA', channel, { channel, count });
@@ -607,7 +703,7 @@
                 console.error('MP: Invalid numeric values', fields);
                 return;
             }
-            
+
             // Resolve pending response promise if waiting (MGP = Motor Get Position)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('MGP', motorIndex.toString(), {
@@ -621,10 +717,10 @@
             if (window.RF && window.RF.settings) {
                 const motorNum = motorIndex + 1;  // Convert index to 1-based for UI
                 const vvcKey = `vvc${motorNum}`;
-                
+
                 // Initialize settings object if needed
                 if (!RF.settings[vvcKey]) RF.settings[vvcKey] = {};
-                
+
                 // Update settings
                 RF.settings[vvcKey].position = positionVal;
                 RF.settings[vvcKey].percent = percentVal;
@@ -634,12 +730,12 @@
                 const vvcPercentEl = document.getElementById(`vvc${motorNum}Percent`);
                 if (vvcCurrentEl) vvcCurrentEl.value = positionVal;
                 if (vvcPercentEl) vvcPercentEl.value = percentVal;
-                
+
                 // Update VVC Position bar display
                 if (typeof RF.ui.updateVvcBar === 'function') {
                     RF.ui.updateVvcBar(motorNum, percentVal);
                 }
-                
+
                 console.log(`Updated VVC ${motorNum} (index=${motorIndex}) - Position: ${positionVal}, Percent: ${percentVal}%`);
             }
         },
@@ -663,7 +759,7 @@
 
             // Register names for display
             const regNames = ['CTRL', 'TORQUE', 'OFF', 'BLANK', 'DECAY', 'STALL', 'DRIVE', 'STATUS'];
-            
+
             // Build status display text
             let statusText = '';
             regs.forEach((val, i) => {
@@ -679,7 +775,7 @@
             }
 
             console.log(`Motor ${idx} Status Registers:`, regs);
-            
+
             // Resolve pending response promise if waiting (MGS = Motor Get Status)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('MGS', idx.toString(), { idx, regs });
@@ -740,7 +836,7 @@
                     RF.ui.updateVvcBar(1, percent0);
                     RF.ui.updateVvcBar(2, percent1);
                 }
-                
+
                 // Update VVC value text display based on displayMode
                 if (typeof RF.ui.updateVvcDisplay === 'function') {
                     RF.ui.updateVvcDisplay('vvc1', 1);
@@ -752,43 +848,34 @@
         },
 
         handleMotorSettings: function (fields, config) {
-            // Format: MST,posStreamRate,saveRate,saveEnabled
-            if (fields.length !== 3) {
-                console.error('MST: Expected 3 fields (posStreamRate, saveRate, saveEnabled), got', fields.length);
+            // Format: MST,posStreamRate
+            if (fields.length < 1) {
+                console.error('MST: Expected at least 1 field (posStreamRate), got', fields.length);
                 return;
             }
 
             const posStreamRate = parseInt(fields[0]);
-            const saveRate = parseInt(fields[1]);
-            const saveEnabled = parseInt(fields[2]);
 
             // NaN check
-            if (isNaN(posStreamRate) || isNaN(saveRate) || isNaN(saveEnabled)) {
-                console.error('MST: Invalid numeric values', fields);
+            if (isNaN(posStreamRate)) {
+                console.error('MST: Invalid numeric value', fields);
                 return;
             }
 
             // Update global settings
             if (window.RF && window.RF.settings) {
                 RF.settings.motorPosStreamRate = posStreamRate;
-                RF.settings.motorPosSaveRate = saveRate;
-                RF.settings.motorPosSaveEnabled = (saveEnabled === 1);
 
-                // Update UI fields in Controls Settings modal
+                // Update UI field in Controls Settings modal
                 const posStreamRateInput = document.getElementById('motorPosStreamRate');
-                const saveRateInput = document.getElementById('motorPosSaveRate');
-                const saveEnabledInput = document.getElementById('motorPosSaveEnabled');
-
                 if (posStreamRateInput) posStreamRateInput.value = posStreamRate;
-                if (saveRateInput) saveRateInput.value = saveRate;
-                if (saveEnabledInput) saveEnabledInput.checked = (saveEnabled === 1);
 
-                console.log(`MST: PosStreamRate=${posStreamRate}ms, SaveRate=${saveRate}ms, SaveEnabled=${saveEnabled === 1}`);
+                console.log(`MST: PosStreamRate=${posStreamRate}ms`);
             }
 
             // Resolve pending response promise if waiting (MST = Motor Settings)
             if (typeof RF.core.resolveResponse === 'function') {
-                RF.core.resolveResponse('MST', null, { posStreamRate, saveRate, saveEnabled: saveEnabled === 1 });
+                RF.core.resolveResponse('MST', null, { posStreamRate });
             }
         },
 
@@ -832,6 +919,10 @@
         handleMotorFittingCoeffs: function (fields, config) {
             // Format: MFC,idx,a0,a1,a2,a3
             // Note: xMin and xRange are derived from Motor Limits (Min/Max), not sent separately
+
+            // Debug: Log raw received fields for parsing verification
+            console.log('MFC: Raw fields received:', JSON.stringify(fields), 'length:', fields.length);
+
             if (fields.length < 5) {
                 console.error('MFC: Expected 5 fields (idx, a0, a1, a2, a3), got', fields.length);
                 return;
@@ -843,6 +934,9 @@
             const a2 = parseFloat(fields[3]);
             const a3 = parseFloat(fields[4]);
 
+            // Debug: Log parsed values
+            console.log(`MFC: Parsed motor ${motorIndex} - a0=${a0}, a1=${a1}, a2=${a2}, a3=${a3}`);
+
             // Validate motorIndex (0 or 1)
             if (isNaN(motorIndex) || (motorIndex !== 0 && motorIndex !== 1)) {
                 console.error('MFC: Invalid motor index (must be 0 or 1)', fields);
@@ -851,7 +945,7 @@
 
             // NaN check for coefficients - allow 0 values
             if (isNaN(a0) || isNaN(a1) || isNaN(a2) || isNaN(a3)) {
-                console.error('MFC: Invalid numeric values', fields);
+                console.error('MFC: Invalid numeric values - a0:', a0, 'a1:', a1, 'a2:', a2, 'a3:', a3);
                 return;
             }
 
@@ -859,32 +953,300 @@
             if (window.RF && window.RF.settings) {
                 const vvcKey = motorIndex === 0 ? 'vvc1' : 'vvc2';
                 const vvcNum = motorIndex + 1;
-                
+
                 // Initialize settings object if needed
                 if (!RF.settings[vvcKey]) RF.settings[vvcKey] = {};
-                
+
                 // Update fitting coefficients (normalized)
                 RF.settings[vvcKey].fitCoeffs = [a0, a1, a2, a3];
-                
+
                 // Update UI fields in VVC Settings modal
                 const fitA0El = document.getElementById(`vvc${vvcNum}FitA0`);
                 const fitA1El = document.getElementById(`vvc${vvcNum}FitA1`);
                 const fitA2El = document.getElementById(`vvc${vvcNum}FitA2`);
                 const fitA3El = document.getElementById(`vvc${vvcNum}FitA3`);
-                
+
                 if (fitA0El) fitA0El.value = a0;
                 if (fitA1El) fitA1El.value = a1;
                 if (fitA2El) fitA2El.value = a2;
                 if (fitA3El) fitA3El.value = a3;
-                
+
                 // Note: Min/Max Cap are user-input values from MGL, not auto-calculated from fitting coefficients
-                
+
                 console.log(`MFC: Motor ${motorIndex} (VVC${motorIndex}) - a0=${a0}, a1=${a1}, a2=${a2}, a3=${a3}`);
             }
-            
+
             // Resolve pending response promise if waiting (MFC = Motor Fitting Coefficients)
             if (typeof RF.core.resolveResponse === 'function') {
                 RF.core.resolveResponse('MFC', motorIndex.toString(), { motorIndex, a0, a1, a2, a3 });
+            }
+        },
+
+        handleMotorExtendedInfo: function (fields, config) {
+            // Format: MXI,idx,indexPos,stallDetected
+            if (fields.length !== 3) {
+                console.error('MXI: Expected 3 fields (idx, indexPos, stallDetected), got', fields.length);
+                return;
+            }
+
+            const motorIndex = parseInt(fields[0]);
+            const indexPos = parseInt(fields[1]);
+            const stallDetected = parseInt(fields[2]) === 1;
+
+            // Validate motorIndex (0 or 1)
+            if (isNaN(motorIndex) || (motorIndex !== 0 && motorIndex !== 1)) {
+                console.error('MXI: Invalid motor index (must be 0 or 1)', fields);
+                return;
+            }
+
+            // NaN check
+            if (isNaN(indexPos)) {
+                console.error('MXI: Invalid numeric values', fields);
+                return;
+            }
+
+            // Update global settings and UI
+            if (window.RF && window.RF.settings) {
+                const motorNum = motorIndex + 1;  // Convert index to 1-based for UI
+                const motorKey = `motor${motorNum}`;
+
+                // Initialize settings object if needed
+                if (!RF.settings[motorKey]) RF.settings[motorKey] = {};
+
+                // Update settings
+                RF.settings[motorKey].indexPos = indexPos;
+                RF.settings[motorKey].stallDetected = stallDetected;
+
+                // Update UI fields
+                const indexPosEl = document.getElementById(`motor${motorNum}IndexPos`);
+                const stallLedEl = document.getElementById(`ledStall${motorNum}`);
+
+                if (indexPosEl) indexPosEl.textContent = indexPos;
+
+                if (stallLedEl) {
+                    stallLedEl.classList.remove('on-green', 'on-red');
+                    if (stallDetected) {
+                        stallLedEl.classList.add('on-red');
+                    } else {
+                        stallLedEl.classList.add('on-green');
+                    }
+                }
+
+                console.log(`MXI: Motor ${motorIndex} - IndexPos=${indexPos}, Stall=${stallDetected}`);
+            }
+
+            // Resolve pending response promise if waiting (MXI = Motor Extended Info)
+            if (typeof RF.core.resolveResponse === 'function') {
+                RF.core.resolveResponse('MXI', motorIndex.toString(), { motorIndex, indexPos, stallDetected });
+            }
+        },
+
+        handleMotorFindIndex: function (fields, config) {
+            // Format: MFI,idx,found,indexPos,motorPosAtIndex,finalPos
+            if (fields.length !== 5) {
+                console.error('MFI: Expected 5 fields (idx, found, indexPos, motorPosAtIndex, finalPos), got', fields.length);
+                return;
+            }
+
+            const motorIndex = parseInt(fields[0]);
+            const found = parseInt(fields[1]) === 1;
+            const indexPos = parseInt(fields[2]);
+            const motorPosAtIndex = parseInt(fields[3]);
+            const finalPos = parseInt(fields[4]);
+
+            // Validate motorIndex (0 or 1)
+            if (isNaN(motorIndex) || (motorIndex !== 0 && motorIndex !== 1)) {
+                console.error('MFI: Invalid motor index (must be 0 or 1)', fields);
+                return;
+            }
+
+            // Update UI elements
+            const resultEl = document.getElementById(`findIndexResult${motorIndex + 1}`);
+            if (resultEl) {
+                if (found) {
+                    resultEl.textContent = `Found: IndexPos=${indexPos} @ MotorPos=${motorPosAtIndex}`;
+                    resultEl.style.color = '#4ec9b0';  // Green
+                } else {
+                    resultEl.textContent = 'Not found';
+                    resultEl.style.color = '#f44747';  // Red
+                }
+            }
+
+            // Log result
+            if (found) {
+                RF.ui.log(`M${motorIndex} Index Found: IndexPos=${indexPos} @ MotorPos=${motorPosAtIndex}, Final=${finalPos}`);
+            } else {
+                RF.ui.log(`M${motorIndex} Index Not Found, Final=${finalPos}`);
+            }
+
+            console.log(`MFI: Motor ${motorIndex} - Found=${found}, IndexPos=${indexPos}, MotorPosAtIndex=${motorPosAtIndex}, FinalPos=${finalPos}`);
+
+            // Resolve pending response promise if waiting (MFI = Motor Find Index)
+            if (typeof RF.core.resolveResponse === 'function') {
+                RF.core.resolveResponse('MFI', motorIndex.toString(), { motorIndex, found, indexPos, motorPosAtIndex, finalPos });
+            }
+        },
+
+        handleMotorRewind: function (fields, config) {
+            // Format: MRW,idx,completed,finalPos,movement
+            if (fields.length !== 4) {
+                console.error('MRW: Expected 4 fields (idx, completed, finalPos, movement), got', fields.length);
+                return;
+            }
+
+            const motorIndex = parseInt(fields[0]);
+            const completed = parseInt(fields[1]) === 1;
+            const finalPos = parseInt(fields[2]);
+            const movement = parseInt(fields[3]);
+
+            // Validate motorIndex (0 or 1)
+            if (isNaN(motorIndex) || (motorIndex !== 0 && motorIndex !== 1)) {
+                console.error('MRW: Invalid motor index (must be 0 or 1)', fields);
+                return;
+            }
+
+            // Update UI elements
+            const resultEl = document.getElementById(`rewindResult${motorIndex + 1}`);
+            if (resultEl) {
+                if (completed) {
+                    resultEl.textContent = `Done: Pos=${finalPos}, Moved=${movement}`;
+                    resultEl.style.color = '#4ec9b0';  // Green
+                } else {
+                    resultEl.textContent = `Timeout: Pos=${finalPos}, Moved=${movement}`;
+                    resultEl.style.color = '#f44747';  // Red
+                }
+            }
+
+            // Log result
+            if (completed) {
+                RF.ui.log(`M${motorIndex} Rewind Complete: FinalPos=${finalPos}, Movement=${movement}`);
+            } else {
+                RF.ui.log(`M${motorIndex} Rewind Timeout: FinalPos=${finalPos}, Movement=${movement}`);
+            }
+
+            console.log(`MRW: Motor ${motorIndex} - Completed=${completed}, FinalPos=${finalPos}, Movement=${movement}`);
+
+            // Resolve pending response promise if waiting (MRW = Motor Rewind)
+            if (typeof RF.core.resolveResponse === 'function') {
+                RF.core.resolveResponse('MRW', motorIndex.toString(), { motorIndex, completed, finalPos, movement });
+            }
+        },
+
+        handleVswrSettings: function (fields, config) {
+            // Format: VSW,start,stop,restart
+            if (fields.length !== 3) {
+                console.error('VSW: Expected 3 fields (start, stop, restart), got', fields.length);
+                return;
+            }
+
+            const vswrStart = parseFloat(fields[0]);
+            const vswrStop = parseFloat(fields[1]);
+            const vswrRestart = parseFloat(fields[2]);
+
+            // NaN check
+            if (isNaN(vswrStart) || isNaN(vswrStop) || isNaN(vswrRestart)) {
+                console.error('VSW: Invalid numeric values', fields);
+                return;
+            }
+
+            // Update global settings
+            if (window.RF && window.RF.settings) {
+                if (!RF.settings.vswr) RF.settings.vswr = {};
+                RF.settings.vswr.start = vswrStart;
+                RF.settings.vswr.stop = vswrStop;
+                RF.settings.vswr.restart = vswrRestart;
+
+                // Update UI fields in Matching Algorithm Settings modal
+                const vswrStartInput = document.getElementById('vswrStart');
+                const vswrStopInput = document.getElementById('vswrStop');
+                const vswrRestartInput = document.getElementById('vswrRestart');
+
+                if (vswrStartInput) vswrStartInput.value = vswrStart;
+                if (vswrStopInput) vswrStopInput.value = vswrStop;
+                if (vswrRestartInput) vswrRestartInput.value = vswrRestart;
+
+                // Update Smith Chart VSWR circles with current display settings
+                if (typeof RF.ui.setSmithChartSettings === 'function') {
+                    RF.ui.setSmithChartSettings({
+                        vswrStart: vswrStart,
+                        vswrStop: vswrStop,
+                        vswrRestart: vswrRestart
+                    });
+                }
+
+                console.log(`VSW: Start=${vswrStart}, Stop=${vswrStop}, Restart=${vswrRestart}`);
+            }
+
+            // Resolve pending response promise if waiting (VSW = VSWR Settings)
+            if (typeof RF.core.resolveResponse === 'function') {
+                RF.core.resolveResponse('VSW', null, { vswrStart, vswrStop, vswrRestart });
+            }
+        },
+
+        handleAmsStatus: function (fields, config) {
+            // Format: AMS,status,vswr,EN (status = MATCHED, RESTART, RUN, TIMEOUT, etc.)
+            if (fields.length < 1) {
+                console.error('AMS: Expected at least 1 field (status), got', fields.length);
+                return;
+            }
+
+            const status = fields[0];
+            const vswr = fields.length >= 2 ? parseFloat(fields[1]) : null;
+
+            console.log(`AMS Status: ${status}${vswr !== null ? `, VSWR=${vswr}` : ''}`);
+
+            // Emit event for UI updates
+            if (typeof RF.events !== 'undefined' && typeof RF.events.emit === 'function') {
+                RF.events.emit('ams_status', { status: status, vswr: vswr });
+
+                // Also emit specific events for state changes
+                if (status === 'MATCHED') {
+                    RF.events.emit('ams_matched', { vswr: vswr });
+                } else if (status === 'RESTART') {
+                    RF.events.emit('ams_restart', { vswr: vswr });
+                }
+            }
+        },
+
+        handleAmsSettings: function (fields, config) {
+            // Format: AST,interval,timeout,logInterval,EN
+            if (fields.length !== 3) {
+                console.error('AST: Expected 3 fields (interval, timeout, logInterval), got', fields.length);
+                return;
+            }
+
+            const interval = parseInt(fields[0]);
+            const timeout = parseInt(fields[1]);
+            const logInterval = parseInt(fields[2]);
+
+            // NaN check
+            if (isNaN(interval) || isNaN(timeout) || isNaN(logInterval)) {
+                console.error('AST: Invalid numeric values', fields);
+                return;
+            }
+
+            // Update global settings
+            if (window.RF && window.RF.settings) {
+                if (!RF.settings.ams) RF.settings.ams = {};
+                RF.settings.ams.interval = interval;
+                RF.settings.ams.timeout = timeout;
+                RF.settings.ams.logInterval = logInterval;
+
+                // Update UI fields in Matching Algorithm Settings modal
+                const intervalInput = document.getElementById('amsInterval');
+                const timeoutInput = document.getElementById('amsTimeout');
+                const logIntervalInput = document.getElementById('amsLogInterval');
+
+                if (intervalInput) intervalInput.value = interval;
+                if (timeoutInput) timeoutInput.value = timeout;
+                if (logIntervalInput) logIntervalInput.value = logInterval;
+
+                console.log(`AST: Interval=${interval}, Timeout=${timeout}, LogInterval=${logInterval}`);
+            }
+
+            // Resolve pending response promise if waiting
+            if (typeof RF.core.resolveResponse === 'function') {
+                RF.core.resolveResponse('AST', null, { interval, timeout, logInterval });
             }
         }
     };

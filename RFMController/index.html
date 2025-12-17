@@ -89,8 +89,46 @@
                         </div>
                     </div>
 
-                    <div class="command-group">
-                        <h3>INPUT SENSOR</h3>
+                    <div class="command-group" id="matchingAlgorithmGroup">
+                        <div class="command-group-header">
+                            <h3>Matching Algorithm</h3>
+                            <div class="command-group-actions">
+                                <button id="btnMatchingSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                                <button id="btnMatchingCollapse" class="collapse-btn" title="Collapse">−</button>
+                            </div>
+                        </div>
+                        <div class="command-group-content" id="matchingAlgorithmContent">
+                            <div class="control-row">
+                                <label>Commands</label>
+                                <div class="toggle-group">
+                                    <button class="btn sm" id="btnAmcCalc" title="Calculate impedance points (A,B,C,D,P)">AMC</button>
+                                    <button class="btn sm" id="btnAmgGoals" title="Calculate VVC goals for 50Ω matching">AMG</button>
+                                    <button class="btn sm" id="btnAmrRun" title="Calculate and move to matching position">AMR</button>
+                                    <button class="btn sm" id="btnAmsAuto" title="Auto matching using internal sensors" style="background: #2d7d46; border-color: #2d7d46;">AMS</button>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label>Input R, X</label>
+                                <input type="number" id="matchingInputR" value="" placeholder="R" step="0.01" style="width: 70px;">
+                                <input type="number" id="matchingInputX" value="" placeholder="X" step="0.01" style="width: 70px;">
+                            </div>
+                            <div class="control-row">
+                                <label>Output R, X</label>
+                                <input type="number" id="matchingOutputR" value="" placeholder="Rp" step="0.01" style="width: 70px;">
+                                <input type="number" id="matchingOutputX" value="" placeholder="Xp" step="0.01" style="width: 70px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="command-group" id="inputSensorGroup">
+                        <div class="command-group-header">
+                            <h3>INPUT SENSOR</h3>
+                            <div class="command-group-actions">
+                                <button id="btnInputSensorSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                                <button id="btnInputSensorCollapse" class="collapse-btn" title="Collapse">−</button>
+                            </div>
+                        </div>
+                        <div class="command-group-content" id="inputSensorContent">
                         <div class="button-row">
                             <button class="btn cmd-btn" data-cmd="ri i">Init</button>
                         </div>
@@ -132,10 +170,18 @@
                             <label>Reset</label>
                             <button class="btn sm" id="btnResetInput">Reset</button>
                         </div>
+                        </div>
                     </div>
 
-                    <div class="command-group">
-                        <h3>OUTPUT SENSOR</h3>
+                    <div class="command-group" id="outputSensorGroup">
+                        <div class="command-group-header">
+                            <h3>OUTPUT SENSOR</h3>
+                            <div class="command-group-actions">
+                                <button id="btnOutputSensorSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                                <button id="btnOutputSensorCollapse" class="collapse-btn collapsed" title="Expand">+</button>
+                            </div>
+                        </div>
+                        <div class="command-group-content collapsed" id="outputSensorContent">
                         <div class="button-row">
                             <button class="btn cmd-btn" data-cmd="ri o">Init</button>
                         </div>
@@ -177,13 +223,18 @@
                             <label>Reset</label>
                             <button class="btn sm" id="btnResetOutput">Reset</button>
                         </div>
+                        </div>
                     </div>
 
-                    <div class="command-group">
-                        <div class="panel-header-with-toggle" style="margin-bottom: 10px;">
-                            <h3 style="margin: 0; border-bottom: none; padding-bottom: 0;">Motor</h3>
-                            <button id="btnMotorSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                    <div class="command-group" id="motorGroup">
+                        <div class="command-group-header">
+                            <h3>Motor</h3>
+                            <div class="command-group-actions">
+                                <button id="btnMotorSettings" class="terminal-settings-btn" title="Settings">⚙</button>
+                                <button id="btnMotorCollapse" class="collapse-btn collapsed" title="Expand">+</button>
+                            </div>
                         </div>
+                        <div class="command-group-content collapsed" id="motorContent">
                         <div class="control-row">
                             <label>Init</label>
                             <div class="toggle-group">
@@ -201,10 +252,21 @@
                             </div>
                         </div>
                         <div class="control-row">
+                            <label>Wake</label>
+                            <div class="toggle-group">
+                                <button class="btn sm cmd-btn" data-cmd="msw 0 1" title="Wake Motor 0 (nSLEEP=HIGH)" style="background: #2d7d46; border-color: #2d7d46;">M0</button>
+                                <button class="btn sm cmd-btn" data-cmd="msw 1 1" title="Wake Motor 1 (nSLEEP=HIGH)" style="background: #2d7d46; border-color: #2d7d46;">M1</button>
+                                <button class="btn sm cmd-btn" data-cmd="mhr 0" title="HW Reset Motor 0" style="background: #8a3d5a; border-color: #8a3d5a;">RST0</button>
+                                <button class="btn sm cmd-btn" data-cmd="mhr 1" title="HW Reset Motor 1" style="background: #8a3d5a; border-color: #8a3d5a;">RST1</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
                             <label>Set Origin</label>
                             <div class="toggle-group">
                                 <button class="btn sm origin-btn" id="btnOrigin0" data-motor="0" style="background: #8b4513; border-color: #8b4513;">M0</button>
                                 <button class="btn sm origin-btn" id="btnOrigin1" data-motor="1" style="background: #8b4513; border-color: #8b4513;">M1</button>
+                                <button class="btn sm origin-index-btn" id="btnOriginIdx0" data-motor="0" style="background: #5a3d8a; border-color: #5a3d8a;" title="Set origin on next index signal">M0 Idx</button>
+                                <button class="btn sm origin-index-btn" id="btnOriginIdx1" data-motor="1" style="background: #5a3d8a; border-color: #5a3d8a;" title="Set origin on next index signal">M1 Idx</button>
                             </div>
                         </div>
                         <div class="control-row">
@@ -237,6 +299,78 @@
                                 <button class="btn" id="btnMotorForce" style="background: #8b4513; border-color: #8b4513;">Force</button>
                             </div>
                         </div>
+                        <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+                        <div class="control-row">
+                            <label>Index Pos</label>
+                            <div class="toggle-group" style="gap: 15px;">
+                                <span style="font-size: 0.8rem;">M0: <span id="motor1IndexPos" style="color: #4ec9b0;">--</span></span>
+                                <span style="font-size: 0.8rem;">M1: <span id="motor2IndexPos" style="color: #4ec9b0;">--</span></span>
+                                <button class="btn sm cmd-btn" data-cmd="mgi 0" title="Read M0 Index">R0</button>
+                                <button class="btn sm cmd-btn" data-cmd="mgi 1" title="Read M1 Index">R1</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Stall</label>
+                            <div class="toggle-group" style="gap: 15px;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <span style="font-size: 0.8rem;">M0:</span>
+                                    <div class="led-indicator on-green" id="ledStall1" title="M0 Stall">OK</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <span style="font-size: 0.8rem;">M1:</span>
+                                    <div class="led-indicator on-green" id="ledStall2" title="M1 Stall">OK</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Override RPM</label>
+                            <div class="input-group">
+                                <select id="motorOverrideSelect" style="width: 50px;">
+                                    <option value="0">M0</option>
+                                    <option value="1">M1</option>
+                                </select>
+                                <input type="number" id="motorOverrideRpm" value="0" min="0" style="width: 60px;" placeholder="RPM">
+                                <button class="btn sm" id="btnOverrideRpmSet">Set</button>
+                                <button class="btn sm secondary" id="btnOverrideRpmClear">Clr</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Find Index</label>
+                            <div class="input-group">
+                                <select id="findIndexMotorSelect" style="width: 50px;">
+                                    <option value="0">M0</option>
+                                    <option value="1">M1</option>
+                                </select>
+                                <input type="number" id="findIndexTargetPos" value="32000" style="width: 60px;" placeholder="Target">
+                                <input type="number" id="findIndexRpm" value="30" min="1" style="width: 45px;" placeholder="RPM">
+                                <button class="btn sm" id="btnFindIndex" style="background: #5a3d8a; border-color: #5a3d8a;">Find</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Result</label>
+                            <div class="toggle-group" style="flex-direction: column; align-items: flex-start; gap: 3px;">
+                                <span style="font-size: 0.75rem;">M0: <span id="findIndexResult1" style="color: #888;">--</span></span>
+                                <span style="font-size: 0.75rem;">M1: <span id="findIndexResult2" style="color: #888;">--</span></span>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Rewind</label>
+                            <div class="input-group">
+                                <select id="rewindMotorSelect" style="width: 50px;">
+                                    <option value="0">M0</option>
+                                    <option value="1">M1</option>
+                                </select>
+                                <button class="btn sm" id="btnRewind" style="background: #8a3d5a; border-color: #8a3d5a;">Rewind</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Rewind Result</label>
+                            <div class="toggle-group" style="flex-direction: column; align-items: flex-start; gap: 3px;">
+                                <span style="font-size: 0.75rem;">M0: <span id="rewindResult1" style="color: #888;">--</span></span>
+                                <span style="font-size: 0.75rem;">M1: <span id="rewindResult2" style="color: #888;">--</span></span>
+                            </div>
+                        </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -252,13 +386,27 @@
                         <canvas id="smithChart"></canvas>
                     </div>
                     <div class="impedance-readout">
-                        <div class="readout-item"><span class="label">Mag</span><span class="value"
-                                id="valMag">--</span></div>
-                        <div class="readout-item"><span class="label">Phase</span><span class="value"
-                                id="valPhase">--</span></div>
-                        <div class="readout-item"><span class="label">R</span><span class="value" id="valR">--</span>
+                        <!-- Input Sensor Column -->
+                        <div class="readout-column input-column">
+                            <div class="column-header">INPUT</div>
+                            <div class="readout-values">
+                                <div class="readout-item"><span class="label">R</span><span class="value" id="valRIn">--</span></div>
+                                <div class="readout-item"><span class="label">X</span><span class="value" id="valXIn">--</span></div>
+                                <div class="readout-item"><span class="label">V</span><span class="value" id="valVIn">--</span></div>
+                                <div class="readout-item"><span class="label">I</span><span class="value" id="valIIn">--</span></div>
+                                <div class="readout-item"><span class="label">Phase</span><span class="value" id="valPhaseIn">--</span></div>
+                            </div>
                         </div>
-                        <div class="readout-item"><span class="label">X</span><span class="value" id="valX">--</span>
+                        <!-- Output Sensor Column -->
+                        <div class="readout-column output-column">
+                            <div class="column-header">OUTPUT</div>
+                            <div class="readout-values">
+                                <div class="readout-item"><span class="label">R</span><span class="value" id="valROut">--</span></div>
+                                <div class="readout-item"><span class="label">X</span><span class="value" id="valXOut">--</span></div>
+                                <div class="readout-item"><span class="label">V</span><span class="value" id="valVOut">--</span></div>
+                                <div class="readout-item"><span class="label">I</span><span class="value" id="valIOut">--</span></div>
+                                <div class="readout-item"><span class="label">Phase</span><span class="value" id="valPhaseOut">--</span></div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -423,16 +571,6 @@
                                 <p class="settings-help">※ Set refresh rate for Motor Position Run command.</p>
                             </div>
 
-                            <div style="margin-bottom: 12px;">
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <label for="motorPosSaveRate">FRAM Save Interval (ms):</label>
-                                    <label style="margin-left: auto; font-size: 0.85em;">
-                                        <input type="checkbox" id="motorPosSaveEnabled" checked> Enabled
-                                    </label>
-                                </div>
-                                <input type="number" id="motorPosSaveRate" value="1000" min="100" max="60000" step="100">
-                                <p class="settings-help">※ Interval for auto-saving motor position to FRAM.</p>
-                            </div>
                         </div>
                         <div class="modal-footer">
                             <button id="btnReadControlsSettings" class="btn secondary">Read</button>
@@ -469,6 +607,15 @@
                                 <label for="traceLength">Trace Length (History):</label>
                                 <input type="number" id="traceLength" value="1" min="1" max="100">
                                 <p class="settings-help">Number of historical points to display</p>
+                            </div>
+                            <div class="setting-group" style="margin-top: 15px;">
+                                <label>VSWR Circles:</label>
+                                <div class="checkbox-group">
+                                    <label><input type="checkbox" id="chkShowVswrStart"> Start</label>
+                                    <label><input type="checkbox" id="chkShowVswrStop" checked> Stop</label>
+                                    <label><input type="checkbox" id="chkShowVswrRestart"> Restart</label>
+                                </div>
+                                <p class="settings-help">Select which VSWR circles to display</p>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -644,7 +791,7 @@
                                     </div>
                                     <div class="vvc-setting-row">
                                         <label for="motor1RegTorque">TORQUE (1):</label>
-                                        <input type="number" id="motor1RegTorque" value="384" step="1" class="vvc-input">
+                                        <input type="number" id="motor1RegTorque" value="320" step="1" class="vvc-input">
                                     </div>
                                     <div class="vvc-setting-row">
                                         <label for="motor1RegOff">OFF (2):</label>
@@ -708,7 +855,7 @@
                                     </div>
                                     <div class="vvc-setting-row">
                                         <label for="motor2RegTorque">TORQUE (1):</label>
-                                        <input type="number" id="motor2RegTorque" value="384" step="1" class="vvc-input">
+                                        <input type="number" id="motor2RegTorque" value="320" step="1" class="vvc-input">
                                     </div>
                                     <div class="vvc-setting-row">
                                         <label for="motor2RegOff">OFF (2):</label>
@@ -747,6 +894,90 @@
                         <div class="modal-footer">
                             <button id="btnSaveMotorSettings" class="btn primary">Save</button>
                             <button id="btnCancelMotorSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matching Algorithm Settings Modal -->
+                <div id="matchingSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="width: 420px;">
+                        <div class="modal-header">
+                            <h3>Matching Algorithm Settings</h3>
+                            <button id="btnCloseMatchingSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #aaa;">VSWR Thresholds</h4>
+                            <div style="display: flex; gap: 20px; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label>Start</label>
+                                    <input type="number" id="vswrStart" value="1.04" min="1.0" max="10.0" step="0.01" style="width: 65px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label>Stop</label>
+                                    <input type="number" id="vswrStop" value="1.02" min="1.0" max="5.0" step="0.01" style="width: 65px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label>Restart</label>
+                                    <input type="number" id="vswrRestart" value="1.04" min="1.0" max="10.0" step="0.01" style="width: 65px;">
+                                </div>
+                            </div>
+                            <p class="settings-help">※ Start/Restart: begin matching, Stop: match complete</p>
+                            
+                            <h4 style="margin: 16px 0 12px 0; font-size: 0.9rem; color: #aaa;">AMS Settings</h4>
+                            <div style="display: flex; gap: 20px; margin-bottom: 12px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label>Interval (ms)</label>
+                                    <input type="number" id="amsInterval" value="10" min="1" max="1000" step="1" style="width: 65px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label>Timeout (ms)</label>
+                                    <input type="number" id="amsTimeout" value="0" min="0" max="60000" step="100" style="width: 75px;" title="0 = no timeout (continuous)">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label>Log Interval</label>
+                                    <input type="number" id="amsLogInterval" value="10" min="1" max="1000" step="1" style="width: 55px;" title="Output logs every N iterations (e.g., 10 = every 100ms at 10ms interval)">
+                                </div>
+                            </div>
+                            <p class="settings-help">※ AMS: Auto matching using internal sensors</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnReadMatchingSettings" class="btn secondary">Read</button>
+                            <button id="btnSaveMatchingSettings" class="btn primary">Save</button>
+                            <button id="btnCancelMatchingSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Sensor Settings Modal -->
+                <div id="inputSensorSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Input Sensor Settings</h3>
+                            <button id="btnCloseInputSensorSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="settings-help" style="color: #888;">Input sensor settings will be configured here.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnSaveInputSensorSettings" class="btn primary">Save</button>
+                            <button id="btnCancelInputSensorSettings" class="btn secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Sensor Settings Modal -->
+                <div id="outputSensorSettingsModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Output Sensor Settings</h3>
+                            <button id="btnCloseOutputSensorSettings" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="settings-help" style="color: #888;">Output sensor settings will be configured here.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="btnSaveOutputSensorSettings" class="btn primary">Save</button>
+                            <button id="btnCancelOutputSensorSettings" class="btn secondary">Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -879,6 +1110,11 @@
     <script src="js/ui/charts.js"></script>
     <script src="js/modules/protocol.js"></script>
     <script src="js/modules/mockData.js"></script>
+    <!-- Mock Serial Engine (firmware simulation) -->
+    <script src="js/modules/mockDevice.js"></script>
+    <script src="js/modules/mockEngine.js"></script>
+    <script src="js/modules/physicsSimulator.js"></script>
+    <script src="js/modules/mockStreaming.js"></script>
     <script src="js/core/serial.js"></script>
     <script src="js/main.js"></script>
 </body>

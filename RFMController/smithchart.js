@@ -6,7 +6,13 @@ class SmithChart {
             showInput: true,
             showOutput: false,
             traceLength: 1,
-            traceMode: 'points' // 'points' or 'line'
+            traceMode: 'points', // 'points' or 'line'
+            showVswrStart: false,   // Show Start VSWR circle
+            showVswrStop: true,     // Show Stop VSWR circle
+            showVswrRestart: false, // Show Restart VSWR circle
+            vswrStart: 1.04,        // Start matching threshold
+            vswrStop: 1.02,         // Stop matching threshold
+            vswrRestart: 1.04       // Restart matching threshold
         };
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
@@ -296,6 +302,48 @@ class SmithChart {
             ctx.restore();
         });
 
+        // --- VSWR CIRCLES ---
+        // VSWR circle: radius in Gamma plane = (S - 1) / (S + 1)
+        // where S is the VSWR value
+        const drawVswrCircle = (vswr, color, label, dashPattern = []) => {
+            if (vswr <= 1.0) return; // Invalid VSWR
+            
+            const gamma = (vswr - 1) / (vswr + 1);
+            const circleR = gamma * r;
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, circleR, 0, 2 * Math.PI);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5 * baseLineWidth;
+            ctx.setLineDash(dashPattern.map(d => d * baseLineWidth));
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw label
+            const labelX = circleR * Math.cos(-Math.PI / 4);
+            const labelY = circleR * Math.sin(-Math.PI / 4);
+            ctx.fillStyle = color;
+            ctx.font = `bold ${fontSize * 0.9}px Inter, sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(`VSWR=${vswr.toFixed(2)} ${label}`, labelX + 5 * baseLineWidth, labelY - 3 * baseLineWidth);
+        };
+        
+        // Draw Stop VSWR circle (inner - match complete) - Green solid
+        if (this.settings.showVswrStop) {
+            drawVswrCircle(this.settings.vswrStop, '#4caf50', '(Stop)', []);
+        }
+        
+        // Draw Start VSWR circle (outer - start matching) - Red dashed
+        if (this.settings.showVswrStart) {
+            drawVswrCircle(this.settings.vswrStart, '#f44336', '(Start)', [6, 3]);
+        }
+        
+        // Draw Restart VSWR circle - Orange dotted
+        if (this.settings.showVswrRestart) {
+            drawVswrCircle(this.settings.vswrRestart, '#ff9800', '(Restart)', [3, 3]);
+        }
+
         // --- LABEL DRAWING ---
 
         // Helper to get screen pos of intersection (r, x)
@@ -567,10 +615,10 @@ class SmithChart {
 
         // Draw Points
         if (this.settings.showInput) {
-            this.drawTrace(this.inputPoints, '#00ff00', baseLineWidth);
+            this.drawTrace(this.inputPoints, '#4ec9b0', baseLineWidth);  // Teal color
         }
         if (this.settings.showOutput) {
-            this.drawTrace(this.outputPoints, '#ff00ff', baseLineWidth);
+            this.drawTrace(this.outputPoints, '#dcdcaa', baseLineWidth);  // Gold/Yellow color
         }
 
         // Draw Highlight

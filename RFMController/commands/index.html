@@ -312,6 +312,18 @@
                         <td>msd 0 553,552...</td>
                     </tr>
                     <tr>
+                        <td>msw</td>
+                        <td>M-Sleep-Wake</td>
+                        <td>nSLEEP 핀 제어</td>
+                        <td>msw 0 1<br><small>0=Sleep, 1=Wake</small></td>
+                    </tr>
+                    <tr>
+                        <td>mhr</td>
+                        <td>M-HW-Reset</td>
+                        <td>DRV8711 HW 리셋</td>
+                        <td>mhr 0</td>
+                    </tr>
+                    <tr>
                         <td>msl</td>
                         <td>M-Set-Limits</td>
                         <td>Limit + Cap 설정</td>
@@ -380,6 +392,24 @@
                         <td>D-Get-Info</td>
                         <td>장치 정보 조회</td>
                         <td>dgi</td>
+                    </tr>
+                    <tr>
+                        <td>dfb</td>
+                        <td>D-FRAM-Backup</td>
+                        <td>FRAM 백업 (hex 덤프)</td>
+                        <td>dfb 336<br><small>길이 생략시 336</small></td>
+                    </tr>
+                    <tr>
+                        <td>dfr</td>
+                        <td>D-FRAM-Restore</td>
+                        <td>FRAM 복원 (hex 데이터)</td>
+                        <td>dfr 336 4D6F64...</td>
+                    </tr>
+                    <tr>
+                        <td>dfw</td>
+                        <td>D-FRAM-Write</td>
+                        <td>FRAM 단일 쓰기</td>
+                        <td>dfw 0050 1A2B</td>
                     </tr>
                 </tbody>
             </table>
@@ -584,10 +614,85 @@
         </div>
 
         <div class="section">
+            <h2>Auto Matching 명령어 (a*)</h2>
+            <p class="note">RF 매칭 알고리즘 계산. 현재 모터 위치에서 VVC 커패시턴스 자동 획득</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>명령어</th>
+                        <th>구조</th>
+                        <th>설명</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>amc</td>
+                        <td>A-Match-Calc</td>
+                        <td>임피던스 계산 (A,B,C,D,P 지점)</td>
+                        <td>amc 57.44 2.53<br><small>Rm, Xm 입력</small></td>
+                    </tr>
+                    <tr>
+                        <td>amg</td>
+                        <td>A-Match-Goal</td>
+                        <td>50Ω 매칭 목표 VVC 계산</td>
+                        <td>amg 57.44 2.53<br><small>Rm, Xm 입력</small></td>
+                    </tr>
+                    <tr>
+                        <td>amr</td>
+                        <td>A-Match-Run</td>
+                        <td>매칭 계산 후 모터 이동</td>
+                        <td>amr 57.44 2.53<br><small>Rm, Xm 입력, 자동 모터 이동</small></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>회로 토폴로지</h3>
+            <pre><code>측정 Zm(Rm,Xm) → [Lp 36nH, Cp 15.3pF] → A
+                                         ├─ B: [VVC0, LB0 157nH, CB0 1.9pF]
+                                         └─ C: A||B 병렬 → [CC0 2pF, CC1 1.5pF, LC0 1.03μH] 
+                                              → D → [VVC1, LD0 104nH, CD0 31pF] → Plasma</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>OpCode 응답 - Auto Matching</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>OpCode</th>
+                        <th>설명</th>
+                        <th>형식</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>AMC</td>
+                        <td>Match Calculate</td>
+                        <td>AMC,&lt;RA&gt;,&lt;XA&gt;,&lt;RB&gt;,&lt;XB&gt;,&lt;RC&gt;,&lt;XC&gt;,&lt;RD&gt;,&lt;XD&gt;,&lt;Rp&gt;,&lt;Xp&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>AMG</td>
+                        <td>Match Goals</td>
+                        <td>AMG,&lt;VVC0G0&gt;,&lt;VVC1G0&gt;,&lt;Step0G0&gt;,&lt;Step1G0&gt;,&lt;Valid0&gt;,<br>
+                            &lt;VVC0G1&gt;,&lt;VVC1G1&gt;,&lt;Step0G1&gt;,&lt;Step1G1&gt;,&lt;Valid1&gt;,EN</td>
+                    </tr>
+                    <tr>
+                        <td>AMR</td>
+                        <td>Match Run</td>
+                        <td>AMR,&lt;SelectedGoal&gt;,&lt;Step0&gt;,&lt;Step1&gt;,EN<br>
+                            <small>SelectedGoal: 0 또는 1</small></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
             <h2>명령어 요약</h2>
             <pre><code>RF (r*)      ri, rrs, rrv, rf, rz, rk, rr, rsc, rgc, rsa, rga
-Motor (m*)   mi, mr, mf, mo, mgp, mrp, mss, msg, msc, mst, mgs, msd, msl, mgl
-Device (d*)  da, dh, dsi, dgi</code></pre>
+Motor (m*)   mi, mr, mf, mo, mgp, mrp, mss, msg, msc, mst, mgs, msd, msl, mgl, msw, mhr
+Device (d*)  da, dh, dsi, dgi, dfb, dfr, dfw
+AutoMatch (a*)  amc, amg, amr</code></pre>
         </div>
 
         <div class="footer">

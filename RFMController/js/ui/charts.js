@@ -39,11 +39,17 @@
     RF.ui.updateSmithChart = function (data) {
         if (!smithChartInstance) return;
 
-        // Z = |Z| * e^(j*theta)
-        // Z_rect = |Z| * cos(theta) + j * |Z| * sin(theta)
-        const rad = data.zPhase * (Math.PI / 180);
-        const r = data.zMag * Math.cos(rad);
-        const x = data.zMag * Math.sin(rad);
+        // Use directly provided R, X if available (new format), otherwise calculate from magnitude/phase
+        let r, x;
+        if (data.R !== undefined && data.X !== undefined) {
+            r = data.R;
+            x = data.X;
+        } else {
+            // Backward compatibility: calculate from magnitude and phase
+            const rad = data.zPhase * (Math.PI / 180);
+            r = data.zMag * Math.cos(rad);
+            x = data.zMag * Math.sin(rad);
+        }
 
         // Normalize to Z0
         const zNormR = r / Z0;
@@ -56,19 +62,59 @@
         const gammaR = ((zNormR * zNormR + zNormX * zNormX) - 1) / denom;
         const gammaI = (2 * zNormX) / denom;
 
-        // Update UI
-        const elMag = document.getElementById('valMag');
-        const elPhase = document.getElementById('valPhase');
-        const elR = document.getElementById('valR');
-        const elX = document.getElementById('valX');
-
-        if (elMag) elMag.textContent = data.zMag.toFixed(2);
-        if (elPhase) elPhase.textContent = data.zPhase.toFixed(2);
-        if (elR) elR.textContent = r.toFixed(2);
-        if (elX) elX.textContent = x.toFixed(2);
-
         // Default to true if undefined (backward compatibility)
         const isInput = (data.isInput !== undefined) ? data.isInput : true;
+
+        // Update UI based on sensor type (Input or Output)
+        // New display order: R, X, V, I, Phase
+        if (isInput) {
+            const elRIn = document.getElementById('valRIn');
+            const elXIn = document.getElementById('valXIn');
+            const elVIn = document.getElementById('valVIn');
+            const elIIn = document.getElementById('valIIn');
+            const elPhaseIn = document.getElementById('valPhaseIn');
+
+            if (elRIn) elRIn.textContent = r.toFixed(2);
+            if (elXIn) elXIn.textContent = x.toFixed(2);
+            if (elVIn && data.V !== undefined) elVIn.textContent = data.V.toFixed(2);
+            if (elIIn && data.I !== undefined) elIIn.textContent = data.I.toFixed(2);
+            if (elPhaseIn) elPhaseIn.textContent = data.zPhase.toFixed(2);
+
+            // Also update Matching Algorithm R, X input fields (if not focused by user)
+            const matchingInputR = document.getElementById('matchingInputR');
+            const matchingInputX = document.getElementById('matchingInputX');
+            
+            if (matchingInputR && document.activeElement !== matchingInputR) {
+                matchingInputR.value = r.toFixed(2);
+            }
+            if (matchingInputX && document.activeElement !== matchingInputX) {
+                matchingInputX.value = x.toFixed(2);
+            }
+        } else {
+            const elROut = document.getElementById('valROut');
+            const elXOut = document.getElementById('valXOut');
+            const elVOut = document.getElementById('valVOut');
+            const elIOut = document.getElementById('valIOut');
+            const elPhaseOut = document.getElementById('valPhaseOut');
+
+            if (elROut) elROut.textContent = r.toFixed(2);
+            if (elXOut) elXOut.textContent = x.toFixed(2);
+            if (elVOut && data.V !== undefined) elVOut.textContent = data.V.toFixed(2);
+            if (elIOut && data.I !== undefined) elIOut.textContent = data.I.toFixed(2);
+            if (elPhaseOut) elPhaseOut.textContent = data.zPhase.toFixed(2);
+            
+            // Also update Matching Algorithm Output R, X fields (if not focused by user)
+            const matchingOutputR = document.getElementById('matchingOutputR');
+            const matchingOutputX = document.getElementById('matchingOutputX');
+            
+            if (matchingOutputR && document.activeElement !== matchingOutputR) {
+                matchingOutputR.value = r.toFixed(2);
+            }
+            if (matchingOutputX && document.activeElement !== matchingOutputX) {
+                matchingOutputX.value = x.toFixed(2);
+            }
+        }
+
         smithChartInstance.addPoint(gammaR, gammaI, isInput);
     };
 

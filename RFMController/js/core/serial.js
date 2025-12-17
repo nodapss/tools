@@ -221,6 +221,17 @@
         
         RF.ui.log(cmd, true);
 
+        // Check if Mock Engine is enabled
+        if (RF.mock && RF.mock.isEnabled && RF.mock.isEnabled()) {
+            // Route command to Mock Engine
+            const handled = RF.mock.processCommand(cmd);
+            if (handled) {
+                // Mock Engine will send response via processIncomingData
+                // Return resolved promise immediately (mock responses are async)
+                return Promise.resolve();
+            }
+        }
+
         if (!port || !port.writable) {
             return Promise.resolve();
         }

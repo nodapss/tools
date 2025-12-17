@@ -3,12 +3,27 @@ window.RF = {
     core: {},
     modules: {},
     ui: {},
+    events: {
+        _listeners: {},
+        on: function(event, callback) {
+            if (!this._listeners[event]) {
+                this._listeners[event] = [];
+            }
+            this._listeners[event].push(callback);
+        },
+        off: function(event, callback) {
+            if (!this._listeners[event]) return;
+            this._listeners[event] = this._listeners[event].filter(cb => cb !== callback);
+        },
+        emit: function(event, data) {
+            if (!this._listeners[event]) return;
+            this._listeners[event].forEach(callback => callback(data));
+        }
+    },
     settings: {
         impedanceStreamRate: 100,  // Default 100ms
         viStreamRate: 100,         // Default 100ms
         motorPosStreamRate: 100,   // Default 100ms for motor position polling
-        motorPosSaveRate: 100,     // Default 100ms for FRAM save interval
-        motorPosSaveEnabled: true, // Default enabled for FRAM auto-save
         impedanceAvgCount: 512,     // Default 512 samples
         modelName: '',
         manufactureDate: '',
@@ -46,6 +61,14 @@ window.RF = {
             maxValue: 64000,
             lowerLimit: 4000,
             upperLimit: 60000
+        },
+        vswr: {
+            start: 1.04,        // Start matching when VSWR >= this
+            stop: 1.02,         // Stop matching when VSWR <= this (match complete)
+            restart: 1.04,      // Restart matching if VSWR >= this after match complete
+            showStart: false,   // Show Start VSWR on Smith Chart
+            showStop: true,     // Show Stop VSWR on Smith Chart
+            showRestart: false  // Show Restart VSWR on Smith Chart
         }
     }
 };
