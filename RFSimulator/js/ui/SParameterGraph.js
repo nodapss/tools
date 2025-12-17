@@ -1509,13 +1509,45 @@ class SParameterGraph {
                         const phaseRad = phaseDeg * (Math.PI / 180);
                         real = mag * Math.cos(phaseRad); imag = mag * Math.sin(phaseRad);
                     }
+
+                    // Check Source Data Type (Impedance or S-Param)
+                    const isSourceImpedance = (dataset.metadata && dataset.metadata.sParameter && dataset.metadata.sParameter.toLowerCase() === 'impedance');
+
                     if (currentMeas === 'impedance') {
-                        const den = Math.pow(1 - real, 2) + Math.pow(imag, 2);
-                        if (den === 0) { real = 1e9; imag = 0; } else {
-                            const zNormReal = (1 - real * real - imag * imag) / den;
-                            const zNormImag = (2 * imag) / den;
-                            real = zNormReal * z0; imag = zNormImag * z0;
+                        if (!isSourceImpedance) {
+                            // Source: S-Param -> Target: Impedance (Convert S to Z)
+                            const den = Math.pow(1 - real, 2) + Math.pow(imag, 2);
+                            if (den === 0) { real = 1e9; imag = 0; } else {
+                                const zNormReal = (1 - real * real - imag * imag) / den;
+                                const zNormImag = (2 * imag) / den;
+                                real = zNormReal * z0; imag = zNormImag * z0;
+                            }
+                        } else {
+                            // Source: Impedance -> Target: Impedance (Pass through)
+                            // Assuming raw data is already Real/Imag Z
                         }
+                    } else {
+                        // Target: S-Param
+                        if (isSourceImpedance) {
+                            // Source: Impedance -> Target: S-Param (Convert Z to S)
+                            // Gamma = (Z - Z0) / (Z + Z0)
+                            // Z is complex (real + j*imag), Z0 is real
+                            // Num = (real - z0) + j*imag
+                            // Den = (real + z0) + j*imag
+                            // Result = Num / Den
+                            const r = real; const x = imag;
+                            const den = Math.pow(r + z0, 2) + Math.pow(x, 2);
+                            if (den === 0) { real = 1; imag = 0; } // Should not happen for passive Z
+                            else {
+                                const numReal = r - z0; const numImag = x;
+                                // ( (r-z0) + jx ) * ( (r+z0) - jx ) / den
+                                // Real: ( (r-z0)(r+z0) + x^2 ) / den = (r^2 - z0^2 + x^2) / den
+                                // Imag: ( (r-z0)(-x) + x(r+z0) ) / den = ( -rx + z0x + rx + z0x ) / den = (2*z0*x) / den
+                                real = (r * r - z0 * z0 + x * x) / den;
+                                imag = (2 * z0 * x) / den;
+                            }
+                        }
+                        // else: Source: S-Param -> Target: S-Param (Pass through)
                     }
                     switch (this.currentFormat) {
                         case 'logMag': return FormatConverter.complexToMagDb(real, imag);
@@ -1908,14 +1940,52 @@ class SParameterGraph {
     saveDataAsCSV() {
         let data = null;
         if (this.simulationData) {
-            data = this.simulationData.data;
+            // Save Simulation Data
+            if (Array.isArray(this.simulationData) && this.currentFormat === 'linRabsX') {
+                // For LinRabsX, we need to reconstruct or choose what to save. 
+                // But the requested format is Impedance (Real, Imag).
+                // We should use the raw simulation results if available for best precision.
+                if (this.simulationResults && this.simulationResults.zin) {
+                    // We will generate data on the fly from simulationResults.zin
+                    data = this.simulationResults.zin.map((z, i) => ({
+                        x: this.simulationResults.frequencies[i],
+                        real: z.real,
+                        imag: z.imag
+                    }));
+                } else {
+                    data = this.simulationData[0].data; // Fallback
+                }
+            } else if (this.simulationData.data) {
+                // Check if we have Impedance data in simulation results
+                if (this.simulationResults && this.simulationResults.zin) {
+                    data = this.simulationResults.zin.map((z, i) => ({
+                        x: this.simulationResults.frequencies[i],
+                        real: z.real,
+                        imag: z.imag
+                    }));
+                } else {
+                    data = this.simulationData.data;
+                }
+            }
         } else if (this.csvDatasets && this.csvDatasets.length > 0) {
-            // If multiple CSVs, save the last one for now or maybe merge?
-            // Existing logic suggests saving 'the' loaded data. 
-            // We'll save the most recently loaded one.
+            // Save loaded CSV Data
             const lastDataset = this.csvDatasets[this.csvDatasets.length - 1];
-            if (lastDataset && lastDataset.processedData) {
-                data = lastDataset.processedData.data;
+            // Prefer rawData if it contains real/imag
+            if (lastDataset && lastDataset.rawData) {
+                data = lastDataset.rawData.map(pt => {
+                    // Normalize field names
+                    let real = pt.s11_real;
+                    let imag = pt.s11_imag;
+                    if (real === undefined || imag === undefined) {
+                        // Convert if only mag/phase available
+                        const db = pt.s11_db || 0;
+                        const phase = (pt.phase || 0) * (Math.PI / 180);
+                        const mag = Math.pow(10, db / 20);
+                        real = mag * Math.cos(phase);
+                        imag = mag * Math.sin(phase);
+                    }
+                    return { x: pt.frequency, real, imag };
+                });
             }
         }
 
@@ -1924,65 +1994,42 @@ class SParameterGraph {
             return;
         }
 
-        const now = new Date().toLocaleString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        });
-
-        // 헤더 생성
-        let csvContent = '!CSV A.01.01\n';
-        // User requested: A2=RF_Circuit_Calculator, B2=Simulated, C2=A.01.00
-        csvContent += 'RF_Circuit_Calculator,Simulated,A.01.00\n';
-        csvContent += `!Date: ${now}\n`;
-        csvContent += '!Source: Simulation\n\n';
-        csvContent += 'BEGIN CH1_DATA\n';
-
-        // 컬럼 헤더 및 데이터 포맷 결정
-        const meas = this.currentMeas; // e.g., 'S11'
-        let colName = 'Lin Mag(U)';
-        let formatter = (val) => val; // Default linear
-
-        // unitMap for Keysight standard usually: Lin Mag(U), Log Mag(dB), Phase(deg)
-        // Check current format
-        switch (this.currentFormat) {
-            case 'logMag':
-                colName = 'Log Mag(dB)';
-                break;
-            case 'linMag':
-                colName = 'Lin Mag(U)';
-                break;
-            case 'phase':
-                colName = 'Phase(deg)';
-                break;
-            case 'swr':
-                colName = 'SWR(U)';
-                break;
-            case 'linRabsX':
-                // This format generates two datasets, so CSV export needs special handling
-                // For now, we'll just export the first dataset (Real part)
-                colName = 'R(ohm)';
-                break;
-            default:
-                colName = 'Lin Mag(U)';
+        // Get Z0
+        let z0Real = 50;
+        let z0Imag = 0;
+        if (this.simulationResults && this.simulationResults.config && this.simulationResults.config.z0) {
+            z0Real = this.simulationResults.config.z0;
         }
 
-        if (meas === 'impedance') {
-            // Impedance is special, maybe just save as Magnitude for now?
-            // Or "Z Mag(ohm)"? Keysight CSV usually specific for S-Params.
-            // Let's format nicely: Freq(Hz),Z Mag(ohm) or Z Mag(dB)
-            const unit = this.formatConfig[this.currentFormat]?.unit || '';
-            colName = `Z ${this.currentFormat}(${unit})`;
+        // Construct CSV Content
+        // Row 1: {Label}, {Z0_Real}, {Z0_Imag}
+        let headerLabel = 'Impedance';
+        if (this.currentMeas && this.currentMeas.toUpperCase().startsWith('S')) {
+            headerLabel = this.currentMeas;
         }
+        let csvContent = `${headerLabel},${z0Real},${z0Imag}\n`;
 
-        // Header Line: Freq(Hz),S11 Log Mag(dB)
-        csvContent += `Freq(Hz),${meas} ${colName}\n`;
+        // Row 2: Freq(Hz),Real,Imag
+        csvContent += `Freq(Hz),Real,Imag\n`;
 
-        // Data Rows
+        // Row 3+: Data
         data.forEach(point => {
-            csvContent += `${point.x},${point.y}\n`;
-        });
+            // Ensure we have real/imag
+            let r = point.real;
+            let i = point.imag;
 
-        csvContent += 'END\n';
+            // Fallback if data came from generic plot data (only x, y)
+            if (r === undefined && point.y !== undefined) {
+                // If we are here, it means we lacked raw Z info. 
+                // This shouldn't happen for Impedance mode with Sim results, but safe fallback:
+                r = point.y;
+                i = 0;
+            }
+            if (r === undefined) r = 0;
+            if (i === undefined) i = 0;
+
+            csvContent += `${point.x},${r},${i}\n`;
+        });
 
         // Download
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

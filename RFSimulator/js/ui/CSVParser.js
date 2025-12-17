@@ -284,8 +284,8 @@ const CSVParser = {
 
         // Check for Matching Range Format
         if (lines.length > 0) {
-            const firstLine = lines[0].toLowerCase();
-            if (firstLine.includes('matching range')) {
+            const firstCell = lines[0].split(',')[0].trim().toLowerCase();
+            if (firstCell.includes('matching range')) {
                 return this.parseMatchingRange(csvString);
             }
         }
@@ -293,7 +293,7 @@ const CSVParser = {
         // Custom Format Check (Row 1 Col 1 is S-Param)
         if (lines.length > 0) {
             const firstCell = lines[0].split(',')[0].trim().toUpperCase();
-            if (['S11', 'S12', 'S21', 'S22'].includes(firstCell)) {
+            if (['S11', 'S12', 'S21', 'S22', 'IMPEDANCE'].includes(firstCell)) {
                 return this.parseCustomFormat(csvString);
             }
         }

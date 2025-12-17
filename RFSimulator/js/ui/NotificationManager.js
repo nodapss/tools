@@ -1,4 +1,4 @@
-/*
+/**
  * Notification Manager
  * Handles toast notifications and style injection
  */
@@ -7,7 +7,7 @@ class NotificationManager {
         this.injectStyles();
     }
 
-    /*
+    /**
      * Show notification toast
      * @param {string} message 
      * @param {string} type 'info', 'success', 'error'

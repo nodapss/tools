@@ -429,7 +429,19 @@ class ScriptModal {
                     parseResult = window.CSVParser.parse(csvContent);
                 }
 
-                if (parseResult.data && parseResult.data.length > 0) {
+                if (parseResult.dataType === 'matchingRange' || (parseResult.metadata && parseResult.metadata.type === 'matchingRange')) {
+                    if (window.sParamGraph.currentMeas !== 'matchingRange') {
+                        if (window.notificationManager) {
+                            window.notificationManager.show('Meas를 "Matching Range"로 변경한 후 적용해 주세요.', 'warning');
+                        }
+                        return; // Stop applying this tab
+                    }
+
+                    if (window.sParamGraph.setLoadedMatchingRangeData) {
+                        window.sParamGraph.setLoadedMatchingRangeData(parseResult.paths);
+                        appliedCount++;
+                    }
+                } else if (parseResult.data && parseResult.data.length > 0) {
                     window.sParamGraph.addCsvData(parseResult.data, {
                         fileName: tab.name,
                         ...parseResult.metadata

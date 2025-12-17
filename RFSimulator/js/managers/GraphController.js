@@ -1352,7 +1352,17 @@ class GraphController {
         }
 
         // CSV Header
-        let csvContent = "Matching Range, Version 1.0\n";
+        // Use Characteristic Impedance (Z0)
+        let z0Real = 50;
+        let z0Imag = 0;
+
+        if (this.sParamGraph && this.sParamGraph.simulationResults &&
+            this.sParamGraph.simulationResults.config &&
+            this.sParamGraph.simulationResults.config.z0 !== undefined) {
+            z0Real = this.sParamGraph.simulationResults.config.z0;
+        }
+
+        let csvContent = `Matching Range,${z0Real},${z0Imag}\n`;
         csvContent += "PathID,Real,Imag\n";
 
         // CSV Data
