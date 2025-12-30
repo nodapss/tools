@@ -116,6 +116,17 @@
                             </svg>
                             <span>Port (p)</span>
                         </div>
+                        <div class="component-item" data-type="Z" draggable="true" title="Impedance Block (z)">
+                            <svg viewBox="0 0 60 24" class="component-icon">
+                                <line x1="0" y1="12" x2="10" y2="12" stroke="currentColor" stroke-width="2" />
+                                <rect x="10" y="4" width="40" height="16" fill="none" stroke="currentColor"
+                                    stroke-width="2" />
+                                <text x="30" y="16" text-anchor="middle" font-size="10" fill="currentColor"
+                                    font-weight="bold">Z</text>
+                                <line x1="50" y1="12" x2="60" y2="12" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                            <span>Z Block (z)</span>
+                        </div>
                     </div>
                 </div>
                 <div class="panel mode-indicator">
@@ -216,7 +227,7 @@
                             <option value="1e6" selected>MHz</option>
                             <option value="1e9">GHz</option>
                         </select>
-                        <label>End:</label>
+                        <label>Stop:</label>
                         <input type="number" id="freqEnd" value="100" min="0.001" step="0.1">
                         <select id="freqEndUnit">
                             <option value="1e3">kHz</option>
@@ -226,6 +237,7 @@
                         <label>Points:</label>
                         <input type="number" id="freqPoints" value="1001" min="10" max="10001" step="10">
                     </div>
+
                     <div class="canvas-wrapper" id="canvasWrapper">
                         <svg id="circuitCanvas" class="circuit-canvas">
                             <defs>
@@ -276,8 +288,8 @@
                             <button id="btnLoadGraphData" class="graph-btn" title="Load CSV Data">
                                 <span class="icon">📂</span> Load
                             </button>
-                            <button id="btnResetZoom" class="graph-btn" title="Reset Zoom (Double-click)">
-                                <span class="icon">🔍</span> Reset
+                            <button id="btnClearGraph" class="graph-btn" title="Clear Graph and Markers">
+                                <span class="icon">🗑️</span> Clear
                             </button>
                             <button id="btnGraphSettings" class="graph-btn" title="Graph Settings">
                                 <span class="icon">⚙️</span>
@@ -410,19 +422,43 @@
                             <option value="swr">SWR</option>
                         </select>
                     </div>
-                    <!-- Lin R, X Options (hidden by default) -->
-                    <div class="settings-section lin-rx-options" id="linRXOptions" style="display: none;">
-                        <h4>Lin R, X Options</h4>
+                    <!-- Smith Chart Options (hidden by default) -->
+                    <div class="settings-section smith-chart-options" id="smithChartOptions" style="display: none;">
+                        <h4>Smith Chart Options</h4>
                         <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
-                            <input type="checkbox" id="linRXAbsolute" checked>
-                            <label for="linRXAbsolute">Absolute Imaginary (|X|)</label>
+                            <input type="checkbox" id="smithInputImpedance">
+                            <label for="smithInputImpedance">Show Input Impedance (Z0)</label>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
-                            <input type="checkbox" id="linRXHighlightNegative">
-                            <label for="linRXHighlightNegative">Highlight Negative Imag (Red)</label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                            <label style="font-size: 13px; color: var(--text-muted);">Frequency:</label>
+                            <input type="number" id="smithChartFreq" class="settings-input" value="50" min="0.001"
+                                step="0.1" style="width: 100px;">
+                            <select id="smithChartFreqUnit" class="settings-select" style="width: 80px;">
+                                <option value="1e3">kHz</option>
+                                <option value="1e6" selected>MHz</option>
+                                <option value="1e9">GHz</option>
+                            </select>
                         </div>
                     </div>
-                    <!-- X-Axis Scale Section -->
+                </div>
+                <!-- Lin R, X Options (hidden by default) -->
+                <div class="settings-section lin-rx-options" id="linRXOptions" style="display: none;">
+                    <h4>Lin R, X Options</h4>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                        <input type="checkbox" id="linRXAbsolute" checked>
+                        <label for="linRXAbsolute">Absolute Imaginary (|X|)</label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                        <input type="checkbox" id="linRXHighlightNegative">
+                        <label for="linRXHighlightNegative">Highlight Negative Imag (Red)</label>
+                    </div>
+                </div>
+
+
+
+
+                <div id="tabDisplay" class="settings-tab-content">
+                    <!-- X-Axis Scale Section (Moved) -->
                     <div class="settings-section">
                         <h4>X-Axis Scale</h4>
                         <p class="settings-description">Select the frequency axis scale</p>
@@ -430,11 +466,68 @@
                             <option value="linear" selected>Linear</option>
                             <option value="logarithmic">Logarithmic</option>
                         </select>
-                    </div>
-                </div>
 
-                <!-- Display Tab Content -->
-                <div id="tabDisplay" class="settings-tab-content">
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="xAxisAutoScale" checked>
+                                <label for="xAxisAutoScale">Auto Scale</label>
+                            </div>
+                            <div class="manual-scale-inputs" id="xAxisManualInputs"
+                                style="display: none; flex-direction: column; gap: 8px; margin-top: 5px; opacity: 0.5; pointer-events: none;">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <label for="xAxisMin" style="font-size: 12px; color: #888;">Min Frequency:</label>
+                                    <div style="display: flex; gap: 5px;">
+                                        <input type="number" id="xAxisMin" class="settings-input" style="flex: 1;"
+                                            step="any">
+                                        <select id="xAxisMinUnit" class="settings-select" style="width: 90px;">
+                                            <option value="1">Hz</option>
+                                            <option value="1000">kHz</option>
+                                            <option value="1000000">MHz</option>
+                                            <option value="1000000000">GHz</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <label for="xAxisMax" style="font-size: 12px; color: #888;">Max Frequency:</label>
+                                    <div style="display: flex; gap: 5px;">
+                                        <input type="number" id="xAxisMax" class="settings-input" style="flex: 1;"
+                                            step="any">
+                                        <select id="xAxisMaxUnit" class="settings-select" style="width: 90px;">
+                                            <option value="1">Hz</option>
+                                            <option value="1000">kHz</option>
+                                            <option value="1000000">MHz</option>
+                                            <option value="1000000000">GHz</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Y-Axis Scale Section -->
+                    <div class="settings-section">
+                        <h4>Y-Axis Scale</h4>
+                        <p class="settings-description">Set manual limits for Y-axis</p>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="yAxisAutoScale" checked>
+                                <label for="yAxisAutoScale">Auto Scale</label>
+                            </div>
+                            <div class="manual-scale-inputs" id="yAxisManualInputs"
+                                style="display: flex; gap: 10px; align-items: center; margin-left: 24px; opacity: 0.5; pointer-events: none;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <label for="yAxisMin" style="font-size: 12px;">Min:</label>
+                                    <input type="number" id="yAxisMin" class="settings-input" value="-100" step="10"
+                                        style="width: 70px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <label for="yAxisMax" style="font-size: 12px;">Max:</label>
+                                    <input type="number" id="yAxisMax" class="settings-input" value="0" step="10"
+                                        style="width: 70px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Animation Section -->
                     <div class="settings-section">
                         <h4>Animation</h4>
@@ -491,6 +584,7 @@
 
             <div class="script-tabs">
                 <button class="script-tab active" data-tab="circuit">Circuit Script</button>
+                <button class="script-tab" data-tab="falstad">Falstad Script</button>
                 <button class="script-tab" data-tab="graph">Graph Script</button>
             </div>
 
@@ -500,6 +594,16 @@
                     <div id="scriptPanelCircuit" class="script-panel active">
                         <textarea id="circuitScriptEditor" class="script-editor"
                             placeholder="Paste circuit JSON here..."></textarea>
+                    </div>
+
+                    <!-- Falstad Script Panel -->
+                    <div id="scriptPanelFalstad" class="script-panel">
+                        <div style="padding: 10px 0; font-size: 13px; color: var(--text-secondary);">
+                            Falstad Link: <a href="https://www.falstad.com/circuit/circuitjs.html" target="_blank"
+                                style="color: var(--primary-color);">https://www.falstad.com/circuit/circuitjs.html</a>
+                        </div>
+                        <textarea id="falstadScriptEditor" class="script-editor"
+                            placeholder="Falstad circuit data will appear here..." readonly></textarea>
                     </div>
 
                     <!-- Graph Script Panel -->
@@ -515,6 +619,13 @@
             </div>
 
             <div class="modal-footer">
+                <div id="scriptModalLeftControls"
+                    style="flex: 1; display: flex; align-items: center; gap: 8px; visibility: hidden;">
+                    <input type="checkbox" id="chkScriptIncludePaint">
+                    <label for="chkScriptIncludePaint"
+                        style="font-size: 13px; color: var(--text-primary); cursor: pointer;">Include
+                        Paint</label>
+                </div>
                 <button id="btnCancelScript" class="btn secondary">Cancel</button>
                 <button id="btnApplyScript" class="btn primary">Apply</button>
             </div>
@@ -610,8 +721,33 @@
         </div>
     </div>
 
+    <!-- Paint Font Size Menu (Context Menu) -->
+    <div id="paintFontSizeMenu" class="color-menu"
+        style="display: none; width: 220px; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        <div style="display: flex; align-items: center; gap: 10px; color: var(--text-primary);">
+            <span style="font-size: 12px; white-space: nowrap;">Size:</span>
+            <input type="range" id="paintFontSizeSlider" min="10" max="100" value="14"
+                style="flex: 1; cursor: pointer;">
+            <span id="paintFontSizeDisplay"
+                style="font-size: 12px; min-width: 35px; text-align: right; font-variant-numeric: tabular-nums;">14px</span>
+        </div>
+    </div>
+
+    <!-- Paint Arrow Width Menu (Context Menu) -->
+    <div id="paintArrowWidthMenu" class="color-menu"
+        style="display: none; width: 220px; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        <div style="display: flex; align-items: center; gap: 10px; color: var(--text-primary);">
+            <span style="font-size: 12px; white-space: nowrap;">Width:</span>
+            <input type="range" id="paintArrowWidthSlider" min="1" max="20" value="2" step="1"
+                style="flex: 1; cursor: pointer;">
+            <span id="paintArrowWidthDisplay"
+                style="font-size: 12px; min-width: 35px; text-align: right; font-variant-numeric: tabular-nums;">2px</span>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <!-- Core -->
+
     <script src="js/core/Component.js"></script>
     <script src="js/core/Circuit.js"></script>
     <!-- Components -->
@@ -620,15 +756,22 @@
     <script src="js/components/Capacitor.js"></script>
     <script src="js/components/Ground.js"></script>
     <script src="js/components/TransmissionLine.js"></script>
+    <script src="js/components/ImpedanceBlock.js"></script>
     <script src="js/components/Port.js"></script>
+    <script src="js/components/IntegratedComponent.js"></script>
+
+
     <!-- Editor -->
     <script src="js/editor/CanvasManager.js"></script>
     <script src="js/editor/DragDropHandler.js"></script>
     <script src="js/editor/WireManager.js"></script>
+
     <!-- Simulation -->
     <script src="js/simulation/ComplexMath.js"></script>
     <script src="js/simulation/NetworkAnalyzer.js"></script>
     <script src="js/simulation/Calculator.js"></script>
+    <!-- Utils -->
+    <script src="js/utils/FalstadConverter.js"></script>
     <!-- UI -->
     <script src="js/ui/Toolbar.js"></script>
 
@@ -639,13 +782,18 @@
     <script src="js/ui/SmithChartRenderer.js"></script>
     <script src="js/ui/ResizeHandler.js"></script>
     <script src="js/ui/ComponentModal.js"></script>
+
     <script src="js/ui/InlineSlider.js"></script>
     <script src="js/ui/ValueEditor.js"></script>
     <script src="js/ui/ScriptModal.js"></script>
+    <script src="js/ui/SaveModal.js"></script>
     <!-- Managers -->
     <script src="js/ui/NotificationManager.js"></script>
 
     <script src="js/ui/ShortcutHandler.js"></script>
+    <script src="js/ui/ContextMenu.js"></script>
+    <script src="js/ui/ImpedanceConfigModal.js"></script>
+    <!-- IntegratedConfigModal removed -->
     <script src="js/ui/SettingsModal.js"></script>
     <script src="js/ui/ShortcutModal.js"></script>
     <script src="js/managers/DrawingManager.js"></script>

@@ -260,8 +260,8 @@ class CanvasManager {
      */
     updateGridRect() {
         if (this.gridBackground) {
-            // Add a small buffer to avoid edge artifacts
-            const buffer = 0;
+            // Add a large buffer to avoid edge artifacts
+            const buffer = 5000;
             this.gridBackground.setAttribute('x', this.viewBox.x - buffer);
             this.gridBackground.setAttribute('y', this.viewBox.y - buffer);
             this.gridBackground.setAttribute('width', this.viewBox.width + buffer * 2);
@@ -418,7 +418,9 @@ class CanvasManager {
      */
     fitToContent() {
         const components = this.circuit.getAllComponents();
-        if (components.length === 0) {
+        const wires = this.circuit.getAllWires();
+
+        if (components.length === 0 && wires.length === 0) {
             this.resetView();
             return;
         }
@@ -433,6 +435,13 @@ class CanvasManager {
             maxY = Math.max(maxY, comp.y + 50);
         });
 
+        wires.forEach(wire => {
+            minX = Math.min(minX, wire.startX, wire.endX);
+            minY = Math.min(minY, wire.startY, wire.endY);
+            maxX = Math.max(maxX, wire.startX, wire.endX);
+            maxY = Math.max(maxY, wire.startY, wire.endY);
+        });
+
         const padding = 50;
         const contentWidth = maxX - minX + padding * 2;
         const contentHeight = maxY - minY + padding * 2;
@@ -440,7 +449,8 @@ class CanvasManager {
         const rect = this.svg.getBoundingClientRect();
         const scaleX = rect.width / contentWidth;
         const scaleY = rect.height / contentHeight;
-        const scale = Math.min(scaleX, scaleY, this.maxZoom);
+        // Limit max zoom to 100% (1.0)
+        const scale = Math.min(scaleX, scaleY, 1.0);
 
         this.zoom = scale;
         this.viewBox.width = rect.width / scale;

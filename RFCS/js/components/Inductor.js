@@ -62,6 +62,7 @@ class Inductor extends Component {
         const inductor = new Inductor(data.x, data.y, data.params.inductance);
         inductor.id = data.id;
         inductor.rotation = data.rotation;
+        if (data.showImpedance !== undefined) inductor.showImpedance = data.showImpedance;
         inductor.connections = data.connections;
         if (data.sliderRange) {
             inductor.sliderRange = data.sliderRange;

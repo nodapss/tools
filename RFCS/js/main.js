@@ -11,9 +11,7 @@ let wireManager;
 let toolbar;
 let propertyPanel;
 let calculator;
-let sParamGraph;
-let resizeHandler;
-let scriptModal;
+
 let componentModal;
 let inlineSlider;
 let valueEditor;
@@ -98,6 +96,13 @@ function initApp() {
         console.error('Failed to initialize script modal:', error);
     }
 
+    // Initialize Save Modal
+    try {
+        window.saveModal = new SaveModal();
+    } catch (error) {
+        console.error('Failed to initialize save modal:', error);
+    }
+
     // --- Initialize Controllers ---
 
     // Simulation Controller
@@ -137,6 +142,45 @@ function initApp() {
         btnScript.addEventListener('click', () => scriptModal.open());
     }
 
+    // Bind Frequency Input Triggers
+    const freqInputs = ['freqStart', 'freqEnd', 'freqPoints'];
+    freqInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (!input) return;
+
+        // Trigger simulation when value is committed (Enter or Blur)
+        input.addEventListener('change', () => {
+            if (simulationController) {
+                if (simulationController.isRunMode) {
+                    // Update graph view if frequency changed in Run Mode
+                    simulationController.runSimulation(true);
+                }
+            }
+        });
+
+        // Force commit on Enter key
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                input.blur(); // Triggers 'change' event if value changed
+            }
+        });
+    });
+
+    // Bind Sidebar Buttons
+    const btnToggleSidebar = document.getElementById('btnToggleSidebar');
+    const quickSettingsSidebar = document.getElementById('quickSettingsSidebar');
+
+
+
+
+
+
+
+
+
+
+
+
     // Initialize Shortcut Handler
     shortcutHandler = new ShortcutHandler(circuit, canvasManager);
     window.shortcutHandler = shortcutHandler;
@@ -148,6 +192,8 @@ function initApp() {
     // Initialize Drawing Manager
     drawingManager = new DrawingManager(canvasManager);
     window.drawingManager = drawingManager;
+
+
 
     // Initial render
     canvasManager.renderComponents();

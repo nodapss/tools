@@ -24,6 +24,55 @@
     cursor: crosshair;
 }
 
+/* Wire Selection Mode Custom Cursors */
+.circuit-canvas.selecting-wire {
+    cursor: default !important;
+    /* Default override for canvas/group box */
+}
+
+/* Make group box transparent to events in this mode so we can click inside */
+.circuit-canvas.selecting-wire .group-box {
+    pointer-events: none !important;
+}
+
+/* Force pointer cursor on selectable items */
+.circuit-canvas.selecting-wire .wire,
+.circuit-canvas.selecting-wire .circuit-component {
+    cursor: pointer !important;
+    pointer-events: all !important;
+    /* Ensure they capture events */
+}
+
+/* Wire Selection Mode - Hover Highlight (Green) */
+/* 1. Directly hovering the visible wire */
+.circuit-canvas.selecting-wire .wire:hover,
+/* 2. Hovering the invisible hitbox triggers the visible wire highlight */
+.circuit-canvas.selecting-wire .wire-hitbox:hover+.wire {
+    stroke: #00FF00 !important;
+    stroke-width: 4px;
+    filter: drop-shadow(0 0 4px #00FF00);
+}
+
+/* Ensure hitbox shows pointer cursor too */
+.circuit-canvas.selecting-wire .wire-hitbox {
+    cursor: pointer !important;
+    pointer-events: stroke !important;
+}
+
+/* Components: Target visible parts ONLY when group is hovered */
+.circuit-canvas.selecting-wire .circuit-component:hover .component-body,
+.circuit-canvas.selecting-wire .circuit-component:hover .terminal {
+    stroke: #00FF00 !important;
+    color: #00FF00 !important;
+    filter: drop-shadow(0 0 4px #00FF00);
+}
+
+/* Ensure hitbox stays invisible */
+.circuit-canvas.selecting-wire .circuit-component .hitbox {
+    stroke: none !important;
+    filter: none !important;
+}
+
 .grid-background {
     pointer-events: none;
 }
@@ -128,7 +177,7 @@
     stroke: var(--component-wire);
     stroke-width: 2;
     fill: none;
-    cursor: default;
+    cursor: pointer;
     transition: stroke var(--transition-fast);
 }
 
@@ -141,6 +190,14 @@
     stroke: var(--selection-color);
     stroke-width: 3;
     filter: drop-shadow(0 0 4px var(--selection-color));
+}
+
+.wire-hitbox {
+    stroke: transparent;
+    stroke-width: 15px;
+    fill: none;
+    cursor: pointer;
+    pointer-events: stroke;
 }
 
 .wire-preview {
@@ -229,4 +286,22 @@
 .circuit-component.matching-highlight .component-body * {
     stroke: #f3ed92 !important;
     color: #ffee00 !important;
+}
+
+/* Drawing Shape Selection */
+.drawing-shape {
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+
+.drawing-shape:hover {
+    /* filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5)); */
+    /* Filter causes subpixel-antialiasing to toggle, causing text weight flicker. Removed. */
+    opacity: 0.8;
+}
+
+.drawing-shape.selected {
+    /* filter: drop-shadow(0 0 4px #00ffff); */
+    /* Filter causes rendering artifacts on siblings. Removed. */
+    opacity: 0.6;
 }

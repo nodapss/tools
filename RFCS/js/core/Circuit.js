@@ -18,6 +18,9 @@ class Circuit {
         // Event callbacks
         this.onChange = null;
         this.onSelect = null;
+
+        // Group Plots (Sub-circuit simulations)
+        this.groupPlots = [];
     }
 
     /**
@@ -37,9 +40,21 @@ class Circuit {
         const component = this.components.get(id);
         if (!component) return false;
 
-        // Remove connected wires
+        // Visual Group update: Removal from Group
+        this.removeFromGroups(id, 'component');
+
+        // Disconnect connected wires instead of removing them
         const connectedWires = this.getWiresConnectedTo(id);
-        connectedWires.forEach(wire => this.removeWire(wire.id));
+        connectedWires.forEach(wire => {
+            if (wire.startComponent === id) {
+                wire.startComponent = null;
+                wire.startTerminal = null;
+            }
+            if (wire.endComponent === id) {
+                wire.endComponent = null;
+                wire.endTerminal = null;
+            }
+        });
 
         // Remove from selection
         this.selectedItems.delete(id);
@@ -48,6 +63,123 @@ class Circuit {
         this.components.delete(id);
 
         this.updateSpatialConnections(); // Update visuals immediately
+        this.notifyChange();
+        return true;
+    }
+
+    /**
+     * Helper to remove item references from IntegratedComponents
+     */
+    removeFromGroups(id, type) {
+        this.components.forEach(comp => {
+            if (comp.type === 'INTEGRATED') {
+                let changed = false;
+                if (type === 'component') {
+                    const idx = comp.componentIds.indexOf(id);
+                    if (idx !== -1) {
+                        comp.componentIds.splice(idx, 1);
+                        changed = true;
+                    }
+                } else if (type === 'wire') {
+                    const idx = comp.wireIds.indexOf(id);
+                    if (idx !== -1) {
+                        comp.wireIds.splice(idx, 1);
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    comp.updateDimensions();
+                    // If empty, remove group? Optional.
+                }
+            }
+        });
+    }
+
+    /**
+     * Internal rename helper (no history)
+     */
+    _silentRename(oldId, newId) {
+        const component = this.components.get(oldId);
+        if (!component) return;
+
+        component.id = newId;
+        this.components.delete(oldId);
+        this.components.set(newId, component);
+
+        // Update DOM element ID
+        if (component.element) {
+            component.element.setAttribute('data-id', newId);
+            component.render(); // Update label
+        }
+
+        this.getAllWires().forEach(wire => {
+            if (wire.startComponent === oldId) wire.startComponent = newId;
+            if (wire.endComponent === oldId) wire.endComponent = newId;
+        });
+
+        if (this.selectedItems.has(oldId)) {
+            this.selectedItems.delete(oldId);
+            this.selectedItems.add(newId);
+        }
+    }
+
+    /**
+     * Rename component
+     * returns true if successful, false if ID exists or invalid
+     */
+    renameComponent(oldId, newId) {
+        if (!newId || newId === oldId) return false;
+        if (this.components.has(newId)) return false; // ID already exists
+
+        const component = this.components.get(oldId);
+        if (!component) return false;
+
+        // 1. Update component internal ID
+        component.id = newId;
+
+        // 2. Update Map (Delete old, Set new)
+        this.components.delete(oldId);
+        this.components.set(newId, component);
+
+        // 3. Update DOM element ID explicitly
+        if (component.element) {
+            component.element.setAttribute('data-id', newId);
+            component.render(); // Update label
+        }
+
+        // 4. Update Wires referencing this component
+        // Wait, getWiresConnectedTo checks startComponent/endComponent which are STRINGS.
+        // So we need to update wires MANUALLY since they still hold the old string ID.
+
+        this.getAllWires().forEach(wire => {
+            let changed = false;
+            if (wire.startComponent === oldId) {
+                wire.startComponent = newId;
+                changed = true;
+            }
+            if (wire.endComponent === oldId) {
+                wire.endComponent = newId;
+                changed = true;
+            }
+            // If wire was referencing old connections map in component, that's already memory-linked to component object?
+            // Component.connections stores WIRE IDs, so component -> wire link is fine.
+            // Wire -> component link is via ID string, so we just updated it.
+        });
+
+        // 4. Update Selection Set
+        if (this.selectedItems.has(oldId)) {
+            this.selectedItems.delete(oldId);
+            this.selectedItems.add(newId);
+        }
+
+        // 5. Save History
+        this.saveHistory('rename', {
+            oldId: oldId,
+            newId: newId
+        });
+
+        // 6. Notify
         this.notifyChange();
         return true;
     }
@@ -100,6 +232,7 @@ class Circuit {
         }
 
         this.selectedItems.delete(id);
+        this.removeFromGroups(id, 'wire');
         this.saveHistory('removeWire', { wire: wire.toJSON() });
         this.wires.delete(id);
         this.notifyChange();
@@ -138,7 +271,24 @@ class Circuit {
         }
 
         const idArray = Array.isArray(ids) ? ids : [ids];
-        idArray.forEach(id => {
+        const finalIds = new Set(idArray);
+
+        // Find Groups related to selection (Bidirectional)
+        this.components.forEach(comp => {
+            if (comp.type === 'INTEGRATED') {
+                // Check if this Group is being selected
+                if (idArray.includes(comp.id)) {
+                    // Select all children
+                    comp.componentIds.forEach(cid => finalIds.add(cid));
+                    comp.wireIds.forEach(wid => finalIds.add(wid));
+                }
+
+                // Child -> Group expansion REMOVED to allow atomic child selection
+                // Logic moved to DragDropHandler for smart selection.
+            }
+        });
+
+        finalIds.forEach(id => {
             this.selectedItems.add(id);
 
             const component = this.components.get(id);
@@ -197,6 +347,96 @@ class Circuit {
         return this.getSelectedItems()
             .map(id => this.wires.get(id))
             .filter(w => w !== undefined);
+    }
+
+    /**
+     * Create Integrated Component from selection
+     */
+    /**
+     * Create Integrated Component from selection (Grouping)
+     */
+    createIntegratedComponent(components, wires, config = null) {
+        console.log('[Circuit] createIntegratedComponent called (Group)', { components, wires, config });
+
+        if (!components || components.length === 0) return false;
+
+        // 1. Calculate Center Position (for layout purposes)
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        components.forEach(c => {
+            minX = Math.min(minX, c.x);
+            minY = Math.min(minY, c.y);
+            maxX = Math.max(maxX, c.x);
+            maxY = Math.max(maxY, c.y);
+        });
+        const centerX = Math.round((minX + maxX) / 2 / 20) * 20;
+        const centerY = Math.round((minY + maxY) / 2 / 20) * 20;
+
+        // 2. Create Integrated Component
+        const integratedComp = new window.IntegratedComponent(centerX, centerY);
+        const compIds = components.map(c => c.id);
+        const wireIds = wires.map(w => w.id);
+
+        integratedComp.setInternalCircuit(compIds, wireIds, config || {});
+
+        // 3. Add New Component (Reference-based, so NO removal of originals)
+        this.addComponent(integratedComp);
+
+        // 4. Select New Group (Atomic selection will handle children)
+        this.select(integratedComp.id);
+
+        this.notifyChange();
+        return integratedComp;
+    }
+
+    /**
+     * Ungroup Integrated Component
+     * Dissolves the group and selects the original components
+     */
+    ungroupIntegratedComponent(id) {
+        const comp = this.components.get(id);
+        if (!comp || comp.type !== 'INTEGRATED') return;
+
+        const childIds = [...comp.componentIds, ...comp.wireIds];
+
+        // Only remove the Group Wrapper. 
+        // Logic in removeComponent(id) calls removeFromGroups which is circular if we call it on itself?
+        // Actually removeComponent just removes it from this.components.
+        // It's safe.
+        this.removeComponent(id);
+
+        // Restore selection of children
+        // Need to wait for render update? No, logical selection is fine.
+        this.select(childIds);
+        this.notifyChange();
+    }
+
+    /**
+     * Group Plot Management
+     */
+    addGroupPlot(config) {
+        // Generate ID if missing
+        if (!config.id) {
+            config.id = `group_plot_${Date.now()}`;
+        }
+
+        // Check if updating existing
+        const existingIdx = this.groupPlots.findIndex(p => p.id === config.id);
+        if (existingIdx >= 0) {
+            this.groupPlots[existingIdx] = config;
+        } else {
+            this.groupPlots.push(config);
+        }
+        this.notifyChange(); // Verify if this trigger is enough or if we need explicit graph update
+        return config;
+    }
+
+    removeGroupPlot(id) {
+        this.groupPlots = this.groupPlots.filter(p => p.id !== id);
+        this.notifyChange();
+    }
+
+    getGroupPlots() {
+        return this.groupPlots;
     }
 
     /**
@@ -302,7 +542,7 @@ class Circuit {
      */
     undo() {
         // Determine which stack to use based on Paint Mode
-        const isPaintMode = window.drawingManager && window.drawingManager.activeTool;
+        const isPaintMode = window.drawingManager && window.drawingManager.isPaintMode;
         let index = isPaintMode ? this.paintHistoryIndex : this.circuitHistoryIndex;
         const stack = isPaintMode ? this.paintHistory : this.circuitHistory;
 
@@ -388,10 +628,21 @@ class Circuit {
                 }
                 this.notifyChange();
                 break;
+            case 'rename':
+                this._silentRename(state.data.newId, state.data.oldId);
+                this.notifyChange();
+                break;
 
             // Paint Actions
             case 'paint_circuit_add':
                 if (window.drawingManager) window.drawingManager.removeCircuitShape(state.data.id);
+                break;
+            case 'paint_circuit_remove':
+                // Undo remove -> Add back
+                if (window.drawingManager) window.drawingManager.addCircuitShape(state.data);
+                break;
+            case 'paint_circuit_move':
+                if (window.drawingManager) window.drawingManager.moveShape(state.data.id, -state.data.dx, -state.data.dy);
                 break;
             case 'paint_graph_add':
                 if (window.drawingManager) window.drawingManager.removeGraphShape(state.data.id);
@@ -409,7 +660,7 @@ class Circuit {
      */
     redo() {
         // Determine which stack to use based on Paint Mode
-        const isPaintMode = window.drawingManager && window.drawingManager.activeTool;
+        const isPaintMode = window.drawingManager && window.drawingManager.isPaintMode;
         let index = isPaintMode ? this.paintHistoryIndex : this.circuitHistoryIndex;
         const stack = isPaintMode ? this.paintHistory : this.circuitHistory;
 
@@ -437,6 +688,18 @@ class Circuit {
                 break;
             case 'remove':
                 this.components.delete(state.data.component.id);
+                this.notifyChange();
+                break;
+            case 'property_change':
+                const compRedo = this.components.get(state.data.id);
+                if (compRedo) {
+                    Object.assign(compRedo, state.data.current);
+                    if (compRedo.updateLabel) compRedo.updateLabel();
+                }
+                this.notifyChange();
+                break;
+            case 'rename':
+                this._silentRename(state.data.oldId, state.data.newId);
                 this.notifyChange();
                 break;
             case 'addWire':
@@ -486,18 +749,17 @@ class Circuit {
                 }
                 this.notifyChange();
                 break;
-            case 'property_change':
-                const compRedo = this.components.get(state.data.id);
-                if (compRedo) {
-                    Object.assign(compRedo, state.data.current);
-                    if (compRedo.updateLabel) compRedo.updateLabel();
-                }
-                this.notifyChange();
-                break;
 
             // Paint Actions
             case 'paint_circuit_add':
                 if (window.drawingManager) window.drawingManager.addCircuitShape(state.data);
+                break;
+            case 'paint_circuit_remove':
+                // Redo remove -> Remove again
+                if (window.drawingManager) window.drawingManager.removeCircuitShape(state.data.id);
+                break;
+            case 'paint_circuit_move':
+                if (window.drawingManager) window.drawingManager.moveShape(state.data.id, state.data.dx, state.data.dy);
                 break;
             case 'paint_graph_add':
                 if (window.drawingManager) window.drawingManager.addGraphShape(state.data);
@@ -520,18 +782,21 @@ class Circuit {
             'C': window.Capacitor,
             'GND': window.Ground,
             'TL': window.TransmissionLine,
-            'PORT': window.Port
+            'PORT': window.Port,
+            'INTEGRATED': window.IntegratedComponent
         };
         return classes[type];
     }
 
     /**
-     * Notify change callback
+     * Notify listeners of change
      */
     notifyChange() {
         if (this.onChange) {
-            this.onChange(this);
+            this.onChange();
         }
+        // Dispatch global event for other controllers
+        window.dispatchEvent(new CustomEvent('circuit-modified'));
     }
 
     /**
@@ -557,6 +822,8 @@ class Circuit {
         this.notifyChange();
     }
 
+
+
     /**
      * Export circuit to JSON
      */
@@ -572,6 +839,15 @@ class Circuit {
      * Import circuit from JSON
      */
     fromJSON(data) {
+        console.log('[Circuit] fromJSON called. Data:', {
+            componentsCount: data.components ? data.components.length : 0,
+            wiresCount: data.wires ? data.wires.length : 0,
+            hasPaint: !!data.paint, // Log paint existence specifically
+            paintData: data.paint   // Log actual paint data object
+        });
+
+        console.log('[Circuit] Checking DrawingManager:', !!window.drawingManager); // Check if manager exists
+
         this.clear();
 
         if (data.components) {
@@ -586,6 +862,8 @@ class Circuit {
                     if (idNum > Component.idCounter) {
                         Component.idCounter = idNum;
                     }
+                } else {
+                    console.warn('[Circuit] fromJSON: Unknown component type:', compData.type);
                 }
             });
         }
@@ -595,6 +873,12 @@ class Circuit {
                 const wire = Wire.fromJSON(wireData);
                 this.wires.set(wire.id, wire);
             });
+        }
+
+        // Restore Paint Data (if available)
+        if (data.paint && window.drawingManager) {
+            window.drawingManager.clearAll(false); // Clear existing drawings first (no history)
+            window.drawingManager.loadPaintData(data.paint);
         }
 
         this.updateSpatialConnections(); // Update visuals
@@ -796,10 +1080,24 @@ class Circuit {
 
         wire.render();
     }
+
+
+
+    // Helper: Get neighboring components
+    getNeighbors(compId) {
+        const neighbors = new Set();
+        const wires = this.getWiresConnectedTo(compId);
+        wires.forEach(w => {
+            if (w.startComponent === compId && w.endComponent) neighbors.add(w.endComponent);
+            else if (w.endComponent === compId && w.startComponent) neighbors.add(w.startComponent);
+        });
+        return Array.from(neighbors);
+    }
+
+
+
+
 }
 
 // Export for use in other modules
 window.Circuit = Circuit;
-
-
-

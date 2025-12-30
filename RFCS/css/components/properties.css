@@ -3,7 +3,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 160px;
 }
 
 .properties-content {
@@ -31,20 +31,20 @@
 .property-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     margin-bottom: var(--spacing-sm);
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
 }
 
 .property-label {
     font-size: 12px;
     color: var(--text-secondary);
     flex-shrink: 0;
-    min-width: 60px;
+    min-width: 15px;
 }
 
 .property-input {
-    flex: 1;
+    flex: 0 1 auto;
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
@@ -67,11 +67,12 @@
 }
 
 .value-with-unit input {
-    width: 80px;
+    width: 65px;
+    min-width: 0;
 }
 
 .value-with-unit select {
-    width: 60px;
+    width: 55px;
 }
 
 /* ===== Component Header ===== */
@@ -91,7 +92,7 @@
 }
 
 .component-type-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -179,12 +180,26 @@
     border: 2px solid var(--border-primary);
 }
 
-.color-indicator.resistor { background: var(--component-resistor); }
-.color-indicator.inductor { background: var(--component-inductor); }
-.color-indicator.capacitor { background: var(--component-capacitor); }
-.color-indicator.ground { background: var(--component-ground); }
-.color-indicator.tline { background: var(--component-tline); }
-.color-indicator.port { background: var(--component-port); }
+.color-indicator.resistor {
+    background: var(--component-resistor);
+}
 
+.color-indicator.inductor {
+    background: var(--component-inductor);
+}
 
+.color-indicator.capacitor {
+    background: var(--component-capacitor);
+}
 
+.color-indicator.ground {
+    background: var(--component-ground);
+}
+
+.color-indicator.tline {
+    background: var(--component-tline);
+}
+
+.color-indicator.port {
+    background: var(--component-port);
+}

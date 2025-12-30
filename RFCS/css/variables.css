@@ -6,18 +6,18 @@
     --bg-tertiary: #21262d;
     --bg-hover: #30363d;
     --bg-active: #388bfd33;
-    
+
     /* Text Colors */
     --text-primary: #e6edf3;
     --text-secondary: #8b949e;
     --text-muted: #6e7681;
     --text-accent: #58a6ff;
-    
+
     /* Border Colors */
     --border-primary: #30363d;
     --border-secondary: #21262d;
     --border-focus: #58a6ff;
-    
+
     /* Accent Colors */
     --accent-primary: #238636;
     --accent-primary-hover: #2ea043;
@@ -25,7 +25,7 @@
     --accent-secondary-hover: #388bfd;
     --accent-warning: #d29922;
     --accent-danger: #f85149;
-    
+
     /* Component Colors */
     --component-resistor: #ff6b6b;
     --component-inductor: #4ecdc4;
@@ -33,47 +33,46 @@
     --component-ground: #95a5a6;
     --component-tline: #a29bfe;
     --component-port: #fd79a8;
-    --component-wire: #74b9ff;
-    
+    --component-wire: var(--selection-color);
+
     /* Grid Colors */
     --grid-dot-color: #30363d;
     --grid-major-color: #484f58;
     --canvas-bg: #0d1117;
-    
+
     /* Selection */
     --selection-color: #58a6ff;
     --selection-bg: rgba(88, 166, 255, 0.1);
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.5);
-    
+
     /* Spacing */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
     --spacing-md: 12px;
     --spacing-lg: 16px;
     --spacing-xl: 24px;
-    
+
     /* Border Radius */
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
-    
+
     /* Font */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'JetBrains Mono', 'Consolas', monospace;
-    
+
     /* Layout */
     --header-height: 56px;
     --sidebar-width: 220px;
     --graph-sidebar-width: 380px;
     --graph-height: 200px;
-    
+
     /* Transitions */
     --transition-fast: 0.1s ease;
     --transition-normal: 0.2s ease;
     --transition-slow: 0.3s ease;
 }
-

@@ -7,10 +7,10 @@ class PropertyPanel {
         this.circuit = circuit;
         this.container = document.getElementById('propertiesContent');
         this.currentComponent = null;
-        
+
         // Bind circuit selection callback
         this.circuit.onSelect = (selected) => this.onSelectionChange(selected);
-        
+
         this.init();
     }
 
@@ -133,6 +133,9 @@ class PropertyPanel {
             case 'PORT':
                 html += this.renderPortParams(component);
                 break;
+            case 'Z':
+                html += this.renderImpedanceBlockParams(component);
+                break;
             case 'GND':
                 html += '<div class="property-row"><span class="property-label">No parameters</span></div>';
                 break;
@@ -148,7 +151,7 @@ class PropertyPanel {
     renderResistorParams(component) {
         return `
             <div class="property-row">
-                <span class="property-label">Resistance:</span>
+                <span class="property-label">Value:</span>
                 <div class="property-input value-with-unit">
                     <input type="number" id="paramResistance" 
                            value="${this.extractValue(component.params.resistance)}" 
@@ -167,7 +170,7 @@ class PropertyPanel {
     renderInductorParams(component) {
         return `
             <div class="property-row">
-                <span class="property-label">Inductance:</span>
+                <span class="property-label">Value:</span>
                 <div class="property-input value-with-unit">
                     <input type="number" id="paramInductance" 
                            value="${this.extractValue(component.params.inductance)}" 
@@ -186,7 +189,7 @@ class PropertyPanel {
     renderCapacitorParams(component) {
         return `
             <div class="property-row">
-                <span class="property-label">Capacitance:</span>
+                <span class="property-label">Value:</span>
                 <div class="property-input value-with-unit">
                     <input type="number" id="paramCapacitance" 
                            value="${this.extractValue(component.params.capacitance)}" 
@@ -260,6 +263,45 @@ class PropertyPanel {
     }
 
     /**
+     * Render impedance block parameters
+     */
+    renderImpedanceBlockParams(component) {
+        return `
+            <div class="property-row">
+                <span class="property-label">Resistance (R):</span>
+                <div class="property-input value-with-unit">
+                    <input type="number" id="paramResistance" 
+                           value="${this.extractValue(component.params.resistance)}" 
+                           step="any" min="0">
+                    <select id="paramResistanceUnit">
+                        ${this.renderUnitOptions('Ω', component.params.resistance)}
+                    </select>
+                </div>
+            </div>
+            <div class="property-row">
+                <span class="property-label">Reactance (X):</span>
+                <div class="property-input value-with-unit">
+                    <input type="number" id="paramReactance" 
+                           value="${this.extractValue(Math.abs(component.params.reactance))}" 
+                           step="any" min="0">
+                    <select id="paramReactanceUnit">
+                        ${this.renderUnitOptions('Ω', Math.abs(component.params.reactance))}
+                    </select>
+                </div>
+            </div>
+            <div class="property-row">
+                <span class="property-label">Sign:</span>
+                <div class="property-input">
+                    <select id="paramSign">
+                        <option value="1" ${component.params.reactance >= 0 ? 'selected' : ''}>+ (Inductive)</option>
+                        <option value="-1" ${component.params.reactance < 0 ? 'selected' : ''}>- (Capacitive)</option>
+                    </select>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Render unit options for SI prefixes
      */
     renderUnitOptions(baseUnit, value) {
@@ -277,8 +319,8 @@ class PropertyPanel {
         ];
 
         const selectedUnit = this.getBestUnit(value, units);
-        
-        return units.map(u => 
+
+        return units.map(u =>
             `<option value="${u.multiplier}" ${u.multiplier === selectedUnit ? 'selected' : ''}>
                 ${u.prefix}${baseUnit}
             </option>`
@@ -298,8 +340,8 @@ class PropertyPanel {
         ];
 
         const selectedUnit = this.getBestUnit(value, units);
-        
-        return units.map(u => 
+
+        return units.map(u =>
             `<option value="${u.multiplier}" ${u.multiplier === selectedUnit ? 'selected' : ''}>
                 ${u.prefix}
             </option>`
@@ -325,7 +367,7 @@ class PropertyPanel {
     extractValue(value) {
         const absValue = Math.abs(value);
         const prefixes = [1e12, 1e9, 1e6, 1e3, 1, 1e-3, 1e-6, 1e-9, 1e-12, 1e-15];
-        
+
         for (const mult of prefixes) {
             if (absValue >= mult) {
                 return (value / mult).toFixed(4).replace(/\.?0+$/, '');
@@ -394,7 +436,7 @@ class PropertyPanel {
     bindComponentParams(component) {
         switch (component.type) {
             case 'R':
-                this.bindValueWithUnit('paramResistance', 'paramResistanceUnit', 
+                this.bindValueWithUnit('paramResistance', 'paramResistanceUnit',
                     (val) => { component.params.resistance = val; });
                 break;
             case 'L':
@@ -438,6 +480,38 @@ class PropertyPanel {
                     });
                 }
                 break;
+            case 'Z':
+                // Resistance Binding
+                this.bindValueWithUnit('paramResistance', 'paramResistanceUnit',
+                    (val) => { component.params.resistance = val; });
+
+                // Reactance Binding (Complex due to Split Sign/Value/Unit)
+                const updateReactance = () => {
+                    const valInput = document.getElementById('paramReactance');
+                    const unitInput = document.getElementById('paramReactanceUnit');
+                    const signInput = document.getElementById('paramSign');
+
+                    if (valInput && unitInput && signInput) {
+                        const val = parseFloat(valInput.value);
+                        const unit = parseFloat(unitInput.value);
+                        const sign = parseFloat(signInput.value);
+
+                        // Calculate new reactance: Sign * Value * Unit
+                        component.params.reactance = sign * val * unit;
+
+                        // Re-render component text
+                        component.render();
+                    }
+                };
+
+                const rInput = document.getElementById('paramReactance');
+                const rUnit = document.getElementById('paramReactanceUnit');
+                const rSign = document.getElementById('paramSign');
+
+                if (rInput) rInput.addEventListener('change', updateReactance);
+                if (rUnit) rUnit.addEventListener('change', updateReactance);
+                if (rSign) rSign.addEventListener('change', updateReactance);
+                break;
         }
     }
 
@@ -447,16 +521,20 @@ class PropertyPanel {
     bindValueWithUnit(inputId, unitId, callback) {
         const input = document.getElementById(inputId);
         const unit = document.getElementById(unitId);
-        
+
         if (input && unit) {
             const updateValue = () => {
                 const value = parseFloat(input.value) * parseFloat(unit.value);
                 callback(value);
                 if (this.currentComponent) {
                     this.currentComponent.render();
+                    // Trigger simulation update
+                    if (this.circuit && typeof this.circuit.notifyChange === 'function') {
+                        this.circuit.notifyChange();
+                    }
                 }
             };
-            
+
             input.addEventListener('change', updateValue);
             unit.addEventListener('change', updateValue);
         }
@@ -539,7 +617,8 @@ class PropertyPanel {
             'C': 'Capacitor',
             'GND': 'Ground',
             'TL': 'Transmission Line',
-            'PORT': 'Port'
+            'PORT': 'Port',
+            'Z': 'Impedance Block'
         };
         return names[type] || type;
     }
@@ -554,7 +633,8 @@ class PropertyPanel {
             'C': 'capacitor',
             'GND': 'ground',
             'TL': 'tline',
-            'PORT': 'port'
+            'PORT': 'port',
+            'Z': 'resistor' // Use resistor color style for now or add new one
         };
         return classes[type] || '';
     }

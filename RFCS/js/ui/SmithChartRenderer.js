@@ -33,8 +33,17 @@ class SmithChartRenderer {
         this.visible = {
             matchingRange: true,
             loadedMatchingRange: true,
-            simulation: true
+            simulation: true,
+            componentTraces: true
         };
+
+        this.componentTraces = []; // Array of { label, points: [{real, imag, freq}], color }
+
+        // Z0 Reference Impedance (default 50)
+        this.z0 = 50;
+
+        // Explicit user option for showing Port Impedance (Z0)
+        this.showPortImpedanceMarker = false;
 
         // Colors - using CircuitCalculator style
         this.colors = {
@@ -74,6 +83,9 @@ class SmithChartRenderer {
                 this.draw();
             });
         }
+
+        // Highlight Marker State
+        this.highlightedMarkerId = null;
 
         // Use ResizeObserver for more robust resizing (handles sidebar resize)
         this.resizeObserver = new ResizeObserver(() => {
@@ -241,7 +253,14 @@ class SmithChartRenderer {
             }
 
             // Update Marker Data
-            const zVal = this.gammaToImpedance(gammaR, gammaI);
+            let zVal;
+            if (nearest && nearest.point && nearest.point.impedance) {
+                zVal = { ...nearest.point.impedance }; // Clone
+                if (zVal.mag === undefined) zVal.mag = Math.sqrt(zVal.r * zVal.r + zVal.x * zVal.x);
+                if (zVal.phase === undefined) zVal.phase = Math.atan2(zVal.x, zVal.r) * (180 / Math.PI);
+            } else {
+                zVal = this.gammaToImpedance(gammaR, gammaI);
+            }
 
             const updates = {
                 y: { r: zVal.r, x: zVal.x },
@@ -451,8 +470,14 @@ class SmithChartRenderer {
             this.drawSimulationTrace(ctx, r, baseLineWidth, this.highlightedDataset === 'simulation');
         }
 
+        // 3.5 Draw Component Traces (if visible)
+        if (this.visible.componentTraces && this.componentTraces && this.componentTraces.length > 0) {
+            this.drawComponentTraces(ctx, r, baseLineWidth);
+        }
+
         // 4. Draw Port Impedance Marker (Matching Range Mode)
-        if (this.visible.matchingRange) {
+        // 4. Draw Port Impedance Marker (Matching Range Mode OR Explicitly Enabled)
+        if (this.visible.matchingRange || this.showPortImpedanceMarker) {
             this.drawPortImpedance(ctx, r, baseLineWidth);
         }
 
@@ -664,6 +689,25 @@ class SmithChartRenderer {
         ctx.fillText(text, x, y - size - (4 * baseLineWidth));
     }
 
+    setShowPortImpedance(visible) {
+        this.showPortImpedanceMarker = visible;
+        // Ensure default 50 ohm if currently unset (though constructor sets it)
+        if (visible && !this.portImpedance) {
+            this.portImpedance = { r: 50, x: 0 };
+        }
+        this.draw();
+        this.draw();
+    }
+
+    setZ0(z0) {
+        if (!z0 || isNaN(z0) || z0 <= 0) return;
+        this.z0 = z0;
+        // Sync port impedance marker to Z0 (effectively center)
+        // This will be overwritten by setMatchingRangeData if in Matching Range mode
+        this.portImpedance = { r: z0, x: 0 };
+        this.draw();
+    }
+
     // ============ Data Methods ============
 
     setMatchingRangeData(data, invertReactance = false) {
@@ -690,6 +734,46 @@ class SmithChartRenderer {
         this.draw();
     }
 
+    setComponentTraces(traces) {
+        this.componentTraces = traces || [];
+        this.draw();
+    }
+
+    drawComponentTraces(ctx, r, baseLineWidth) {
+        if (!this.componentTraces) return;
+
+        this.componentTraces.forEach(trace => {
+            const points = trace.points;
+            if (!points || points.length === 0) return;
+
+            const color = trace.color || '#ffffff';
+            // Highlight if needed (could extend highlight logic later)
+            const lineWidth = 2 * baseLineWidth;
+
+            ctx.beginPath();
+            const startX = points[0].real * r;
+            const startY = -points[0].imag * r;
+            ctx.moveTo(startX, startY);
+
+            for (let i = 1; i < points.length; i++) {
+                const pX = points[i].real * r;
+                const pY = -points[i].imag * r;
+                ctx.lineTo(pX, pY);
+            }
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            // Dashed line for distinction? User just said "Show Impedance".
+            // Let's keep solid for now, maybe add dash support if requested.
+            // ctx.setLineDash([5 * baseLineWidth, 5 * baseLineWidth]);
+            ctx.stroke();
+            // ctx.setLineDash([]);
+
+            // Optional: Draw label or start point?
+            // Overcrowding risk. Tooltip handles details.
+        });
+    }
+
     // ============ Legend Interaction ============
 
     toggleVisibility(datasetName) {
@@ -704,10 +788,16 @@ class SmithChartRenderer {
         this.draw();
     }
 
+    setHighlightedMarker(id) {
+        this.highlightedMarkerId = id;
+        this.draw();
+    }
+
     clear() {
         this.matchingRangePaths = [];
         this.loadedMatchingRangePaths = [];
         this.simulationTrace = [];
+        this.componentTraces = [];
         this.draw();
     }
 
@@ -757,6 +847,11 @@ class SmithChartRenderer {
         // 2. Check Matching Range Paths
         if (this.visible.matchingRange && this.matchingRangePaths) {
             this.matchingRangePaths.forEach(path => checkPoints(path.points));
+        }
+
+        // 2.5 Check Component Traces
+        if (this.visible.componentTraces && this.componentTraces) {
+            this.componentTraces.forEach(trace => checkPoints(trace.points));
         }
 
         // 3. Check Loaded Matching Range Paths
@@ -866,7 +961,7 @@ class SmithChartRenderer {
     }
 
     gammaToImpedance(gr, gi) {
-        const Z0 = 50;
+        const Z0 = this.z0 || 50;
         const denom = (1 - gr) * (1 - gr) + gi * gi;
         const rNorm = (1 - gr * gr - gi * gi) / denom;
         const xNorm = (2 * gi) / denom;
@@ -910,7 +1005,7 @@ class SmithChartRenderer {
         // Normalized Z = (R + jX) / Z0
         // Gamma = (Z_norm - 1) / (Z_norm + 1)
 
-        const Z0 = 50;
+        const Z0 = this.z0 || 50;
         const rNorm = r / Z0;
         const xNorm = x / Z0;
 
@@ -1010,7 +1105,14 @@ class SmithChartRenderer {
             gammaI = gamma.gammaI;
         }
 
-        const zVal = this.gammaToImpedance(gammaR, gammaI);
+        let zVal;
+        if (nearest && nearest.point && nearest.point.impedance) {
+            zVal = { ...nearest.point.impedance };
+            if (zVal.mag === undefined) zVal.mag = Math.sqrt(zVal.r * zVal.r + zVal.x * zVal.x);
+            if (zVal.phase === undefined) zVal.phase = Math.atan2(zVal.x, zVal.r) * (180 / Math.PI);
+        } else {
+            zVal = this.gammaToImpedance(gammaR, gammaI);
+        }
 
         // If we have frequency, use it as 'x' (compatible with Cartesian)
         // MarkerManager will display it as 'Resistance' in Smith Mode, but 'Frequency' in Cartesian
@@ -1093,15 +1195,28 @@ class SmithChartRenderer {
             ctx.fillStyle = markerColor;
             ctx.fill();
 
-            // Highlight if dragging
-            if (this.draggingMarker === marker) {
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
+            // Highlight if dragging or Hovered from Table
+            const isHighlighted = (this.draggingMarker === marker) || (this.highlightedMarkerId === marker.id);
+
+            if (isHighlighted) {
+                ctx.strokeStyle = markerColor; // Use marker color
+                ctx.lineWidth = 3;
+
+                // Glow Effect
+                ctx.shadowColor = markerColor;
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
             } else {
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 1;
+                ctx.shadowBlur = 0; // Reset shadow
             }
             ctx.stroke();
+
+            // Reset Shadow for subsequent drawing (Important!)
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
 
             ctx.fillStyle = markerColor;
 

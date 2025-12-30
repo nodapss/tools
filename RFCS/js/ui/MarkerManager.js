@@ -398,17 +398,27 @@ class MarkerManager {
         }
 
         // Find first available ID number
-        let newIdNum = 1;
-        const existingIds = new Set(this.markers.map(m => {
-            const num = parseInt(m.id.substring(1));
-            return isNaN(num) ? 0 : num;
-        }));
+        // Find first available ID number using Gap Filling
+        // Consistent with Component ID generation
+        const existingNums = this.markers
+            .map(m => {
+                const num = parseInt(m.id.substring(1));
+                return isNaN(num) ? 0 : num;
+            })
+            .filter(n => n > 0)
+            .sort((a, b) => a - b);
 
-        while (existingIds.has(newIdNum)) {
-            newIdNum++;
+        let newIdNum = 1;
+        for (const num of existingNums) {
+            if (num === newIdNum) {
+                newIdNum++;
+            } else if (num > newIdNum) {
+                // Found a gap
+                break;
+            }
         }
 
-        // Ensure counter tracks the maximum just in case
+        // Counter tracks max just for safety/legacy, though not strictly needed for this algorithm
         if (newIdNum >= this.counter) {
             this.counter = newIdNum + 1;
         }
@@ -464,17 +474,30 @@ class MarkerManager {
     /**
      * Render the marker table
      */
+    /**
+     * Render the marker table
+     */
     updateTable() {
         if (!this.markers) return;
 
         // Apply dynamic height
         this._updateContainerHeight();
 
+        // 1. Filter Visible Markers based on Mode
+        const visibleMarkers = this.markers.filter(marker => {
+            // Smith Mode: Show all (or strictly smith-compatible, but usually all are fine)
+            if (this.tableMode === 'smith') return true;
+
+            // Cartesian Mode: Show only if it has a valid X (Frequency)
+            // Markers created on Smith Chart 'void' (Points) usually have x=null
+            return (marker.x !== null && marker.x !== undefined);
+        });
+
         // Clean up any old grid container if it exists
         const gridContainer = this.tableContainer.querySelector('.marker-grid-container');
         if (gridContainer) gridContainer.remove();
 
-        // 1. Get Containers
+        // 2. Get Containers
         const mainTable = this.tableContainer.querySelector('.marker-table');
         let splitContainer = this.tableContainer.querySelector('.marker-split-container');
 
@@ -485,14 +508,14 @@ class MarkerManager {
             // Show Main
             if (mainTable) {
                 mainTable.style.display = 'table';
-                this._renderSingleTableBody(this.tableBody, this.markers);
+                this._renderSingleTableBody(this.tableBody, visibleMarkers);
             }
         } else {
             // === Split Layout (2-3 Cols) ===
             // Hide Main
             if (mainTable) mainTable.style.display = 'none';
             // Show Split
-            this._renderSplitTableLayout(this.tableLayout);
+            this._renderSplitTableLayout(this.tableLayout, visibleMarkers);
         }
 
         this._placeSettingsIcon();
@@ -502,18 +525,13 @@ class MarkerManager {
         if (!tbody) return;
         tbody.innerHTML = '';
         markers.forEach(marker => {
-            // Hide if Cartesian mode and x is null (from Smith Free Cursor)
-            if (this.tableMode !== 'smith' && (marker.x === null || marker.x === undefined)) {
-                return;
-            }
-
             const row = document.createElement('tr');
             this._populateRowContent(row, marker, 'td');
             tbody.appendChild(row);
         });
     }
 
-    _renderSplitTableLayout(columns) {
+    _renderSplitTableLayout(columns, markers) {
         let splitContainer = this.tableContainer.querySelector('.marker-split-container');
         if (!splitContainer) {
             splitContainer = document.createElement('div');
@@ -565,13 +583,8 @@ class MarkerManager {
             bodies.push(tbody);
         }
 
-        // Distribute Markers (Round Robin)
-        this.markers.forEach((marker, index) => {
-            // Hide if Cartesian mode and x is null
-            if (this.tableMode !== 'smith' && (marker.x === null || marker.x === undefined)) {
-                return;
-            }
-
+        // Distribute Markers (Round Robin) using the FILTERED list
+        markers.forEach((marker, index) => {
             const colIndex = index % columns;
             const targetBody = bodies[colIndex];
 
@@ -584,28 +597,10 @@ class MarkerManager {
     }
 
     _renderTableLayout() {
-        // Ensure Table Header is visible and Grid container hidden or removed
-        const table = this.tableContainer.querySelector('.marker-table');
-        if (table) table.style.display = 'table';
-
-        let gridContainer = this.tableContainer.querySelector('.marker-grid-container');
-        if (gridContainer) gridContainer.style.display = 'none';
-
-        if (!this.tableBody) return;
-        this.tableBody.innerHTML = '';
-
-        this.markers.forEach(marker => {
-            // Hide if Cartesian mode and x is null
-            if (this.tableMode !== 'smith' && (marker.x === null || marker.x === undefined)) {
-                return;
-            }
-
-            const row = document.createElement('tr');
-            this._populateRowContent(row, marker, 'td');
-            this.tableBody.appendChild(row);
-        });
-        // Settings Icon placement
-        this._placeSettingsIcon();
+        // Warning: This method seems redundant or legacy compared to updateTable logic? 
+        // But keeping it consistent just in case it's called directly.
+        // Ideally should just call updateTable.
+        this.updateTable();
     }
 
     _placeSettingsIcon() {
@@ -669,7 +664,13 @@ class MarkerManager {
 
         gridContainer.innerHTML = '';
 
-        this.markers.forEach(marker => {
+        // Filter for Grid Layout as well
+        const visibleMarkers = this.markers.filter(marker => {
+            if (this.tableMode === 'smith') return true;
+            return (marker.x !== null && marker.x !== undefined);
+        });
+
+        visibleMarkers.forEach(marker => {
             const card = document.createElement('div');
             card.className = 'marker-card';
             // Mimic row structure but in a card
@@ -896,7 +897,7 @@ class MarkerManager {
         if (Math.abs(val) >= 1e9) displayVal = (val / 1e9).toFixed(3) + 'G';
         else if (Math.abs(val) >= 1e6) displayVal = (val / 1e6).toFixed(3) + 'M';
         else if (Math.abs(val) >= 1e3) displayVal = (val / 1e3).toFixed(3) + 'k';
-        else displayVal = val.toFixed(4);
+        else displayVal = val.toFixed(2);
 
         if (unit) displayVal += ` ${unit}`;
         return displayVal;
@@ -941,14 +942,14 @@ class MarkerManager {
     _formatComplexValue(r, x, freq, mode) {
         // Mode 0: R + jX
         if (mode === 0) {
-            return `${r.toFixed(1)} ${x >= 0 ? '+' : ''}${x.toFixed(1)}j Ω`;
+            return `${r.toFixed(2)} ${x >= 0 ? '+' : ''}${x.toFixed(2)}j Ω`;
         }
 
         // Mode 1: Mag / Phase
         if (mode === 1) {
             const mag = Math.sqrt(r * r + x * x);
             const phase = Math.atan2(x, r) * (180 / Math.PI);
-            return `${mag.toFixed(1)} Ω ∠ ${phase.toFixed(1)}°`;
+            return `${mag.toFixed(2)} Ω ∠ ${phase.toFixed(2)}°`;
         }
 
         // Mode 2: Component Value
@@ -956,7 +957,7 @@ class MarkerManager {
             // omega = 2 * pi * f
             // If f is 0 or invalid, just return R
             if (!freq || freq <= 0) {
-                return `R: ${r.toFixed(1)} Ω`;
+                return `R: ${r.toFixed(2)} Ω`;
             }
 
             const omega = 2 * Math.PI * freq;
@@ -964,17 +965,17 @@ class MarkerManager {
 
             if (Math.abs(x) < 0.001) {
                 // Resistive only
-                return `${r.toFixed(1)} Ω`;
+                return `${r.toFixed(2)} Ω`;
             } else if (x > 0) {
                 // Inductive: L = X / omega
                 const L = x / omega;
                 compStr = this.formatComponentValue(L, 'H');
-                return `${r.toFixed(1)}Ω + ${compStr}`;
+                return `${r.toFixed(2)}Ω + ${compStr}`;
             } else {
                 // Capacitive: C = -1 / (omega * X)
                 const C = -1 / (omega * x);
                 compStr = this.formatComponentValue(C, 'F');
-                return `${r.toFixed(1)}Ω + ${compStr}`; // 'x' is negative, so it implies C
+                return `${r.toFixed(2)}Ω + ${compStr}`; // 'x' is negative, so it implies C
             }
         }
 

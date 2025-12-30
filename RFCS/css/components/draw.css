@@ -61,11 +61,6 @@
 
 .drawing-mode-text {
     cursor: text !important;
-    padding: 2px;
-    z-index: 10000;
-    min-width: 100px;
-    min-height: 20px;
-    display: block;
 }
 
 .icon-svg {

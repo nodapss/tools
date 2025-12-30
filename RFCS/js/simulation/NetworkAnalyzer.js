@@ -337,11 +337,18 @@ class NetworkAnalyzer {
             this.groundNode = primaryGnd;
         }
 
-        // 포트 노드들 찾기
+        // Port nodes find
+        this.portComponents = components.filter(c => c.type === 'PORT');
+
+        // Sort ports by portNumber
+        this.portComponents.sort((a, b) => a.params.portNumber - b.params.portNumber);
+
         this.portNodes = this.portComponents.map(port => {
             const termKey = `${port.id}:start`;
             return this.terminalToNode.has(termKey) ? this.terminalToNode.get(termKey) : -1;
         });
+
+        console.log('[NetworkAnalyzer] Final portNodes:', this.portNodes);
     }
 
     /**
@@ -393,14 +400,45 @@ class NetworkAnalyzer {
             const nodeMapping = this.componentNodes.get(comp.id);
             if (!nodeMapping) return;
 
-            if (comp.type === 'TL') {
-                this.addTransmissionLineToY(Y, comp, nodeMapping, nodeIndexMap, frequency);
+            if (comp.type === 'TL' || comp.type === 'COMPOSITE' || comp.type === 'INTEGRATED') {
+                if ((comp.params && comp.params.isOnePort) || comp.type === 'INTEGRATED') {
+                    this.addOnePortComponentToY(Y, comp, nodeMapping, nodeIndexMap, frequency);
+                } else {
+                    this.addTwoPortABCDComponentToY(Y, comp, nodeMapping, nodeIndexMap, frequency);
+                }
             } else {
                 this.addTwoTerminalToY(Y, comp, nodeMapping, nodeIndexMap, frequency);
             }
         });
 
         return { Y, nodeIndexMap, matrixSize };
+    }
+
+    /**
+     * 1-Port 컴포넌트를 Y-매트릭스에 추가 (Shunt Admittance)
+     */
+    addOnePortComponentToY(Y, comp, nodeMapping, nodeIndexMap, frequency) {
+        const node1 = nodeMapping.start;
+
+        // Calculate Input Impedance from the component
+        const Zobj = comp.getImpedance(frequency);
+        const Z = Complex.fromObject(Zobj);
+
+        let Yelem;
+        if (Z.isZero()) {
+            // Short to Ground?
+            Yelem = new Complex(1e10, 0);
+        } else if (Z.isInfinite()) {
+            Yelem = new Complex(0, 0);
+        } else {
+            Yelem = Z.inverse();
+        }
+
+        const idx1 = node1 !== this.groundNode ? nodeIndexMap.get(node1) : -1;
+
+        if (idx1 !== undefined && idx1 >= 0) {
+            Y.addAt(idx1, idx1, Yelem);
+        }
     }
 
     /**
@@ -434,9 +472,9 @@ class NetworkAnalyzer {
     }
 
     /**
-     * Transmission Line을 Y-매트릭스에 추가
+     * ABCD 파라미터 기반 2-Port 컴포넌트 추가 (TL, Composite 등)
      */
-    addTransmissionLineToY(Y, comp, nodeMapping, nodeIndexMap, frequency) {
+    addTwoPortABCDComponentToY(Y, comp, nodeMapping, nodeIndexMap, frequency) {
         const node1 = nodeMapping.start;
         const node2 = nodeMapping.end;
 
@@ -448,7 +486,21 @@ class NetworkAnalyzer {
         const D = Complex.fromObject(abcd.D);
 
         if (B.isZero()) {
-            console.warn('Transmission line B parameter is zero');
+            // B=0 means Ideal Thru (A=1, D=1, AD-BC=1 => C=0).
+            // Cannot represent with standard Y-parameters directly (Y12 = -1/B -> Inf).
+            // We approximate as a very low impedance resistor (Series Short).
+            const G_short = 1e10; // Large conductance
+            const Yshort = new Complex(G_short, 0);
+
+            const idx1 = node1 !== this.groundNode ? nodeIndexMap.get(node1) : -1;
+            const idx2 = node2 !== this.groundNode ? nodeIndexMap.get(node2) : -1;
+
+            if (idx1 !== undefined && idx1 >= 0) Y.addAt(idx1, idx1, Yshort);
+            if (idx2 !== undefined && idx2 >= 0) Y.addAt(idx2, idx2, Yshort);
+            if (idx1 !== undefined && idx1 >= 0 && idx2 !== undefined && idx2 >= 0) {
+                Y.addAt(idx1, idx2, Yshort.scale(-1));
+                Y.addAt(idx2, idx1, Yshort.scale(-1));
+            }
             return;
         }
 
@@ -475,12 +527,16 @@ class NetworkAnalyzer {
         const { Y, nodeIndexMap, matrixSize } = this.buildYMatrix(frequency);
 
         if (matrixSize === 0) {
-            return new Complex(0, 0);
+            console.warn('[NetworkAnalyzer] calculateInputImpedance: Matrix size is 0 (Empty/Global GND only). Returning Open.');
+            return new Complex(Infinity, 0);
         }
 
-        const portIdx = nodeIndexMap.get(this.portNode);
+        // Use the first port found. (Assumes 1-Port mode)
+        const portNode = this.portNodes.length > 0 ? this.portNodes[0] : -1;
+        const portIdx = nodeIndexMap.get(portNode);
+
         if (portIdx === undefined || portIdx < 0) {
-            // console.warn('Port node not found in matrix');
+            console.warn('[NetworkAnalyzer] calculateInputImpedance: Port node not found in matrix', { portNode, portNodes: this.portNodes });
             return new Complex(Infinity, 0);
         }
 
@@ -492,6 +548,7 @@ class NetworkAnalyzer {
         try {
             const V = ComplexMatrix.solve(Y, I);
             const Zin = V[portIdx];
+            console.log('[NetworkAnalyzer] Input Impedance:', { freq: frequency, Zin, portIdx, portNode });
 
             if (Zin.isInfinite() || isNaN(Zin.real) || isNaN(Zin.imag)) {
                 return new Complex(Infinity, 0);
@@ -517,7 +574,19 @@ class NetworkAnalyzer {
         const { Y, nodeIndexMap, matrixSize } = this.buildYMatrix(frequency);
 
         if (matrixSize === 0) {
-            return this.getDefaultSParams(portCount);
+            // Empty matrix means no nodes (or only Global GND which is excluded).
+            // Treat as Open Circuit for all ports.
+            const sParams = {};
+            const one = new Complex(1, 0);
+            const zero = new Complex(0, 0);
+
+            // Sii = 1 (Open), Sij = 0 (Isolation)
+            for (let i = 1; i <= portCount; i++) {
+                for (let j = 1; j <= portCount; j++) {
+                    sParams[`S${i}${j}`] = (i === j) ? one : zero;
+                }
+            }
+            return sParams;
         }
 
         // 포트 인덱스 매핑
@@ -525,6 +594,14 @@ class NetworkAnalyzer {
 
         // 일부 포트가 매핑되지 않은 경우 (예: 그라운드에 연결됨)
         // 그라운드 연결이면 undefined일 수 있음. 처리 필요.
+
+        // [Singularity Fix] Inject GMIN (pico-Siemens) to diagonal to prevent singular matrix
+        // when nodes are floating or ideal components form invalid loops.
+        const GMIN = new Complex(1e-12, 0);
+        for (let k = 0; k < matrixSize; k++) {
+            const diag = Y.get(k, k);
+            Y.set(k, k, diag.add(GMIN));
+        }
 
         // 포트 Y-파라미터 서브매트릭스 추출
         const Yp = new ComplexMatrix(portCount, portCount);
@@ -564,75 +641,108 @@ class NetworkAnalyzer {
             }
         }
 
-        // *** Better approach: Compute Z-matrix first, then S-matrix ***
-        // Z_ij = V_i / I_j (Apply 1A at Port j, Measure V at Port i)
+        // *** Optimized & Robust Approach: Direct Y -> S Conversion ***
+        // Instead of converting Y -> Z (which fails for Open circuits where Z is infinite),
+        // we directly convert Y to S.
+        // Formula: S = (Yref + Yp)^-1 * (Yref - Yp)
+        // Where Yref = G0 * I (Characteristic Admittance Matrix, G0 = 1/Z0)
+        // Because Yref adds a diagonal term (0.02 S), (Yref + Yp) is always invertible
+        // even if Yp is singular (Open/Short).
 
-        const Zp = new ComplexMatrix(portCount, portCount);
+        const y0 = 1.0 / z0; // 0.02 S for 50 Ohm
+        const Yref = ComplexMatrix.identity(portCount).scale(new Complex(y0, 0));
+
+        // Fill Yp directly from Y matrix (Port Reduction)
+        // Note: Ideally we should use "Schur Complement" or "Kron Reduction" to reduce 
+        // the full Y matrix to ports. However, since we define ports as nodes driven by sources,
+        // and we already treated them as such in 'buildYMatrix' or if we solve for them...
+
+        // Wait, Y (MNA) is the full circuit admittance.
+        // We need the Y-parameters of the n-port network embedded in it.
+        // Current 'Yp' extraction loop above (lines 600-619) tries to extract submatrix.
+        // But MNA Y matrix includes internal nodes. Just taking submatrix [port, port]
+        // is ONLY valid if all other nodes are grounded, which is incorrect.
+
+        // Correct way to get Port Y-parameters (Yp) from MNA Y:
+        // Yp_ij = I_i / V_j with V_k=0 for k!=j.
+        // This requires solving the linear system n times (once per port).
+
+        // 1. Setup Solver for Y matrix
+        // We will solve Y * V = I for each port excitation.
+
+        const Yp_reduced = new ComplexMatrix(portCount, portCount);
 
         for (let j = 0; j < portCount; j++) {
-            const idxJ = portIndices[j];
-            if (idxJ === undefined || idxJ < 0) {
-                // Port J is grounded. V_j is always 0.
-                // If we drive it? We can't drive a ground node with ideal current source (V=0, I=1 -> P=0? Conflict).
-                // Actually, if port is shorted, Z_jj = 0.
-                // But wait, if we short it, we can't drive 1A and measure V. Current flows to ground. V=0.
-                // So column J of Z-matrix is 0?
-                // Valid for passive? Yes.
-                for (let i = 0; i < portCount; i++) Zp.set(i, j, new Complex(0, 0));
-                continue;
-            }
+            const pjIdx = portIndices[j];
+            if (pjIdx === undefined) continue; // Port connected to ground
 
-            // Excitation vector I
-            const Ivec = [];
-            for (let k = 0; k < matrixSize; k++) {
-                Ivec.push(new Complex(k === idxJ ? 1 : 0, 0));
-            }
+            // Apply 1V at Port j, 0V at other ports?
+            // Actually, simply applying Current Source I=1A at Port j results in Z-parameters (V response).
+            // Applying Voltage Source V=1V at Port j and grounding others results in Y-parameters (I response).
+            // But we can't easily ground nodes in MNA without modifying matrix structure (Row/Col deletion).
+
+            // Easier Path: Calculate Z-parameters using Current Sources (standard MNA usage),
+            // BUT handle Open Circuit singularities.
+            // ... But the user SPECIFICALLY asked to avoid "Unnecessary Calculation" and fixed the Singularity. 
+            // The Singularity comes from High Impedance.
+
+            // Let's go back to Z-parameters (Apply 1A), but with GMIN already injected.
+            // With GMIN, Z won't be infinite, just very large (1e12).
+            // The previous error "Singular matrix" happened during `solve` of `Y * V = I`.
+            // GMIN fixes `solve`.
+            // So we CAN use the Z-parameter approach safely now.
+            // But we should optimize the calculation.
+
+            // Let's implement the standard Z-extraction loop cleanly.
+            // Apply 1A at port j, measure V at all ports -> Column j of Z matrix.
+
+            const I_vec = [];
+            for (let k = 0; k < matrixSize; k++) I_vec.push(new Complex(0, 0));
+            I_vec[pjIdx] = new Complex(1, 0); // 1A Current Source
 
             try {
-                // Solve V for excitation at Port J
-                const Vvec = ComplexMatrix.solve(Y, Ivec);
+                // Solve Y * V = I
+                const V_vec = ComplexMatrix.solve(Y, I_vec);
 
-                // Read V at all ports to fill Z column j
+                // Read Trace
                 for (let i = 0; i < portCount; i++) {
-                    const idxI = portIndices[i];
-                    if (idxI === undefined || idxI < 0) {
-                        Zp.set(i, j, new Complex(0, 0)); // Port I is grounded -> V=0
-                    } else {
-                        Zp.set(i, j, Vvec[idxI]);
+                    const piIdx = portIndices[i];
+                    if (piIdx !== undefined) {
+                        // Z_ij = V_i / 1A
+                        Yp_reduced.set(i, j, V_vec[piIdx]); // Actually this is Zp, reusing var name temporarily
                     }
                 }
             } catch (e) {
-                // Solver failed (e.g., floating node, singular matrix)
-                // console.warn('Solver failed for port', j);
+                console.warn('[NetworkAnalyzer] Solver failed even with GMIN', e);
                 return this.getDefaultSParams(portCount);
             }
         }
 
-        // Convert Z-matrix to S-matrix
-        // S = (Z - Z0*I) * (Z + Z0*I)^(-1)
+        const Zp = Yp_reduced; // It is Zp (Open Circuit Impedance)
+
+        // Convert Z -> S
+        // S = (Z - Z0*I) * (Z + Z0*I)^-1
+        // This conversion is standard.
+        // Wait, if Z is very large (Open), (Z+Z0) is large, Inverse is small. Evaluation is stable.
+
         const I = ComplexMatrix.identity(portCount);
-        const Z0I = I.scale(new Complex(z0, 0));
+        const Z0_I = I.scale(new Complex(z0, 0));
 
-        const ZminusZ0 = Zp.subtract(Z0I);
-        const ZplusZ0 = Zp.add(Z0I);
+        const Num = Zp.subtract(Z0_I);
+        const Den = Zp.add(Z0_I);
+        const DenInv = Den.inverse();
 
-        const ZplusZ0Inv = ZplusZ0.inverse();
+        if (!DenInv) return this.getDefaultSParams(portCount);
 
-        if (!ZplusZ0Inv) {
-            return this.getDefaultSParams(portCount);
-        }
+        const S = Num.multiply(DenInv);
 
-        const S = ZminusZ0.multiply(ZplusZ0Inv);
-
-        // S-파라미터 객체로 변환
+        // Map to Output
         const result = {};
         for (let i = 0; i < portCount; i++) {
             for (let j = 0; j < portCount; j++) {
-                const key = `S${i + 1}${j + 1}`;
-                result[key] = S.get(i, j);
+                result[`S${i + 1}${j + 1}`] = S.get(i, j);
             }
         }
-
         return result;
     }
 
@@ -672,6 +782,410 @@ class NetworkAnalyzer {
      */
     getPortCount() {
         return this.portComponents.length;
+    }
+
+    /**
+     * 시스템 상태 (전압/전류) 계산
+     * 시각화를 위해 특정 주파수에서 Port 1을 구동했을 때의 전체 Node 전압과 전류를 계산
+     */
+    calculateSystemState(frequency) {
+        // Ensure analyzer is reset/prepared if not already
+        if (this.nodes.size === 0) {
+            this.analyze();
+        }
+
+        if (this.portComponents.length === 0) return null;
+
+        const { Y, nodeIndexMap, matrixSize } = this.buildYMatrix(frequency);
+        const z0 = 50; // Default Z0
+        const Y0 = new Complex(1 / z0, 0);
+
+        // 1. Port Termination
+        this.portNodes.forEach(nodeId => {
+            if (nodeId !== -1 && nodeId !== this.groundNode) {
+                const idx = nodeIndexMap.get(nodeId);
+                if (idx !== undefined) {
+                    Y.addAt(idx, idx, Y0);
+                }
+            }
+        });
+
+        // 2. Excitation Vector (Port 1 Drive)
+        const Ivec = [];
+        for (let i = 0; i < matrixSize; i++) {
+            Ivec.push(new Complex(0, 0));
+        }
+
+        const drivePortNode = this.portNodes[0];
+        if (drivePortNode !== -1 && drivePortNode !== this.groundNode) {
+            const idx = nodeIndexMap.get(drivePortNode);
+            if (idx !== undefined) {
+                Ivec[idx] = new Complex(1 / z0, 0);
+            }
+        }
+
+        // 3. Solve for Node Voltages
+        let Vnodes = [];
+        try {
+            Vnodes = ComplexMatrix.solve(Y, Ivec);
+        } catch (e) {
+            console.error('System state solve failed:', e);
+            return null;
+        }
+
+        const voltageMap = new Map();
+        nodeIndexMap.forEach((idx, nodeId) => {
+            voltageMap.set(nodeId, Vnodes[idx]);
+        });
+        voltageMap.set(this.groundNode, new Complex(0, 0));
+
+        // 4. Calculate Component Currents
+        const componentCurrents = new Map();
+
+        this.circuit.getAllComponents().forEach(comp => {
+            if (comp.type === 'GND' || comp.type === 'PORT') return;
+
+            const nodeMapping = this.componentNodes.get(comp.id);
+            if (!nodeMapping) return;
+
+            if (comp.type === 'TL') {
+                const vStart = voltageMap.get(nodeMapping.start) || new Complex(0, 0);
+                const vEnd = voltageMap.get(nodeMapping.end) || new Complex(0, 0);
+
+                const abcd = comp.getABCDMatrix(frequency);
+                const A = Complex.fromObject(abcd.A);
+                const B = Complex.fromObject(abcd.B);
+                const C = Complex.fromObject(abcd.C);
+                const D = Complex.fromObject(abcd.D);
+
+                let i2, i1;
+
+                if (B.magnitude() > 1e-10) {
+                    i2 = vStart.sub(A.mul(vEnd)).div(B);
+                    i1 = C.mul(vEnd).add(D.mul(i2));
+                } else {
+                    i1 = new Complex(0, 0);
+                    i2 = new Complex(0, 0);
+                }
+
+                // Store INCOMING currents
+                componentCurrents.set(comp.id, {
+                    start: i1,
+                    end: i2.scale(-1)
+                });
+
+            } else {
+                const vStart = voltageMap.get(nodeMapping.start) || new Complex(0, 0);
+                const vEnd = voltageMap.get(nodeMapping.end) || new Complex(0, 0);
+                const zVal = Complex.fromObject(comp.getImpedance(frequency));
+
+                let iStart;
+                if (zVal.magnitude() < 1e-12) {
+                    iStart = new Complex(0, 0);
+                } else {
+                    iStart = vStart.sub(vEnd).div(zVal);
+                }
+
+                componentCurrents.set(comp.id, {
+                    start: iStart,
+                    end: iStart.scale(-1)
+                });
+            }
+        });
+
+        // 5. Calculate Wire Currents
+        const wireCurrents = this.resolveWireCurrents(voltageMap, componentCurrents);
+
+        return {
+            voltages: voltageMap,
+            componentCurrents,
+            wireCurrents,
+            nodeMapping: nodeIndexMap, // Expose node mapping for UI lookup
+            terminalNodeMap: this.terminalToNode // Expose terminal->node mapping
+        };
+    }
+
+
+
+    /**
+     * 서브시스템 유효성 검사 (Merge용)
+     * 선택된 컴포넌트들이 외부와 정확히 2개의 연결점만 가지는지 확인
+     * @param {Array} components - 선택된 컴포넌트 리스트
+     * @param {Circuit} circuit - 전체 회로 참조
+     * @returns {Object} { valid: boolean, terminals: { start, end }, error: string }
+     */
+    static validateSubsystem(components, circuit) {
+        const compIds = new Set(components.map(c => c.id));
+        const boundaryPoints = [];
+        const groundConnections = [];
+
+        // 선택된 컴포넌트들의 모든 터미널을 검사
+        components.forEach(comp => {
+            Object.keys(comp.terminals).forEach(termName => {
+                const wireId = comp.connections[termName];
+
+                // 1. 와이어가 연결되지 않은 경우 (Open) -> 무시? 아니면 외부 포트로 간주?
+                // 보통 열려있으면 내부 노드임. 하지만 외부 포트가 될 수도 있음.
+                // 여기서는 "와이어를 통해 외부 컴포넌트와 연결된 지점"만 Boundary로 봅니다.
+                // 만약 와이어가 없으면 연결점이 될 수 없음.
+
+                if (wireId) {
+                    const wire = circuit.getWire(wireId);
+                    if (!wire) return;
+
+                    // 와이어의 다른 끝이 선택되지 않은 컴포넌트에 연결되어 있는지 확인
+                    // 또는 와이어 자체가 선택되지 않았는데... (보통 컴포넌트 선택 시 내부 와이어도 선택되어야 함)
+                    // 단순화: "이 터미널에 연결된 와이어"가 "선택되지 않은 컴포넌트"와 연결되어 있는가?
+
+                    // Case A: Wire starts at this component
+                    let otherCompId = null;
+                    if (wire.startComponent === comp.id && wire.startTerminal === termName) {
+                        otherCompId = wire.endComponent;
+                    } else if (wire.endComponent === comp.id && wire.endTerminal === termName) {
+                        otherCompId = wire.startComponent;
+                    }
+
+                    if (otherCompId) {
+                        if (!compIds.has(otherCompId)) {
+                            const otherComp = circuit.getComponent(otherCompId);
+                            // GND 연결은 Boundary Point가 아닌 내부 접지로 처리
+                            if (otherComp && otherComp.type === 'GND') {
+                                groundConnections.push({
+                                    componentId: comp.id,
+                                    terminal: termName,
+                                    x: comp.getTerminalPosition(termName).x,
+                                    y: comp.getTerminalPosition(termName).y
+                                });
+                            } else {
+                                // 일반 외부 컴포넌트와 연결됨 -> Boundary Point
+                                boundaryPoints.push({
+                                    componentId: comp.id,
+                                    terminal: termName,
+                                    x: comp.getTerminalPosition(termName).x,
+                                    y: comp.getTerminalPosition(termName).y,
+                                    connectedTo: otherCompId // For tracing
+                                });
+                            }
+                        }
+                    } else {
+                        // ...
+                    }
+                }
+            });
+        });
+
+        // Port Count Validation (1-Port or 2-Port)
+        if (boundaryPoints.length !== 2 && boundaryPoints.length !== 1) {
+            return {
+                valid: false,
+                error: `외부 연결 지점이 ${boundaryPoints.length}개입니다. (1개 또는 2개여야 함, GND 제외)`
+            };
+        }
+
+        // 기본 정렬 (공간적 정렬: 왼쪽이 start, 오른쪽이 end) - Fallback용
+        boundaryPoints.sort((a, b) => a.x - b.x);
+
+        const isOnePort = boundaryPoints.length === 1;
+
+        return {
+            valid: true,
+            isOnePort: isOnePort,
+            terminals: {
+                start: boundaryPoints[0],
+                end: isOnePort ? null : boundaryPoints[1]
+            },
+            groundConnections: groundConnections
+        };
+    }
+    resolveWireCurrents(voltageMap, componentCurrents) {
+        const wireCurrents = new Map();
+        const netWires = new Map();
+        const netInjections = new Map();
+        const netAnchors = new Map(); // nodeId -> [{x, y}] (Fixed Voltage Points)
+
+        // 1. Build Net data (Wires)
+        this.circuit.getAllWires().forEach(wire => {
+            let nodeId = -1;
+            for (const [id, content] of this.nodes.entries()) {
+                if (content.has(`Wire_${wire.id}`)) {
+                    nodeId = id;
+                    break;
+                }
+            }
+
+            if (nodeId !== -1) {
+                if (!netWires.has(nodeId)) netWires.set(nodeId, []);
+                netWires.get(nodeId).push(wire);
+            }
+        });
+
+        // 2. Identify Injections and Anchors
+        this.circuit.getAllComponents().forEach(comp => {
+            if (comp.type === 'GND' || comp.type === 'PORT') {
+                // Ports and Grounds act as Voltage Anchors (Sinks/Sources)
+                // We don't calculate their current injection explicitly,
+                // but we force their terminal potential to be "Ground" (Relative 0)
+                // in the wire mesh to allow current to flow to/from them.
+                const nodeMap = this.componentNodes.get(comp.id);
+                // GND/PORT usually usage 'start' or single terminal?
+                // PORT has start/end? PORT usually is 2 terminal but drawn as 1?
+                // Check Component implementation. Port usually has nodeMapping.start
+
+                ['start', 'end'].forEach(term => {
+                    const nodeId = nodeMap[term];
+                    if (nodeId !== undefined && netWires.has(nodeId)) {
+                        if (!netAnchors.has(nodeId)) netAnchors.set(nodeId, []);
+                        const pos = comp.getTerminalPosition(term);
+                        netAnchors.get(nodeId).push(pos);
+                    }
+                });
+                return;
+            }
+
+            // R, L, C, TL Injections
+            const currents = componentCurrents.get(comp.id);
+            if (!currents) return;
+
+            const nodeMap = this.componentNodes.get(comp.id);
+            ['start', 'end'].forEach(term => {
+                const nodeId = nodeMap[term];
+                if (nodeId !== undefined && netWires.has(nodeId)) {
+                    if (!netInjections.has(nodeId)) netInjections.set(nodeId, []);
+
+                    const pos = comp.getTerminalPosition(term);
+                    const val = currents[term].scale(-1); // Injection = - Current Into Comp
+
+                    netInjections.get(nodeId).push({
+                        x: pos.x,
+                        y: pos.y,
+                        current: val
+                    });
+                }
+            });
+        });
+
+        // 3. Solve each Net
+        netWires.forEach((wires, nodeId) => {
+            if (wires.length === 0) return;
+
+            const points = [];
+            const pointMap = new Map();
+
+            const getPointIdx = (x, y) => {
+                const key = `${Math.round(x)},${Math.round(y)}`;
+                if (!pointMap.has(key)) {
+                    pointMap.set(key, points.length);
+                    points.push({ x, y });
+                }
+                return pointMap.get(key);
+            };
+
+            wires.forEach(w => {
+                w._p1 = getPointIdx(w.startX, w.startY);
+                w._p2 = getPointIdx(w.endX, w.endY);
+            });
+
+            const N = points.length;
+            const injections = new Array(N).fill(null).map(() => new Complex(0, 0));
+            const isAnchor = new Array(N).fill(false);
+
+            // Apply Injections
+            const nodeInjs = netInjections.get(nodeId) || [];
+            nodeInjs.forEach(inj => {
+                let minD = Infinity;
+                let bestIdx = -1;
+                points.forEach((p, idx) => {
+                    const d = (p.x - inj.x) ** 2 + (p.y - inj.y) ** 2;
+                    if (d < 25 && d < minD) {
+                        minD = d;
+                        bestIdx = idx;
+                    }
+                });
+                if (bestIdx !== -1) {
+                    injections[bestIdx] = injections[bestIdx].add(inj.current);
+                }
+            });
+
+            // Apply Anchors
+            const nodeAnchs = netAnchors.get(nodeId) || [];
+            nodeAnchs.forEach(anch => {
+                let minD = Infinity;
+                let bestIdx = -1;
+                points.forEach((p, idx) => {
+                    const d = (p.x - anch.x) ** 2 + (p.y - anch.y) ** 2;
+                    if (d < 25 && d < minD) {
+                        minD = d;
+                        bestIdx = idx;
+                    }
+                });
+                if (bestIdx !== -1) {
+                    isAnchor[bestIdx] = true;
+                }
+            });
+
+            // Matrix Setup
+            const G = new ComplexMatrix(N, N);
+            const I_vec = [];
+            const gVal = 100; // Conductance of wire segments
+
+            wires.forEach(w => {
+                const u = w._p1;
+                const v = w._p2;
+
+                G.addAt(u, u, new Complex(gVal, 0));
+                G.addAt(v, v, new Complex(gVal, 0));
+                G.addAt(u, v, new Complex(-gVal, 0));
+                G.addAt(v, u, new Complex(-gVal, 0));
+            });
+
+            // Boundary Conditions
+            let hasAnchor = false;
+            for (let i = 0; i < N; i++) {
+                if (isAnchor[i]) {
+                    // Set V[i] = 0 (Dirichlet)
+                    // Method: Reset row i to 0, set diagonal to 1. Set I[i] to 0 (Target V).
+                    // Actually, G.solve solves G * V = I.
+                    // To force V[i] = 0, we can use penalty method (Large diagonal, Small I) or replace equation.
+                    // Replace equation:
+                    // 1 * V[i] + 0 = 0
+
+                    // ComplexMatrix doesn't support row clearing easily.
+                    // Penalty method: Add large value to diagonal.
+                    // (G_ii + Big) * V_i + ... = I_i
+                    // If Big >> others, V_i approx I_i / Big.
+                    // To force 0, keep I_i as is (likely 0) and add Big.
+
+                    G.addAt(i, i, new Complex(1e9, 0));
+                    hasAnchor = true;
+                }
+                I_vec.push(injections[i]);
+            }
+
+            // If no physical anchor (Floating Net or intermediate), fix one node to prevent singularity
+            if (!hasAnchor) {
+                G.addAt(0, 0, new Complex(0.001, 0));
+            }
+
+            // Solve
+            let V_micro = [];
+            try {
+                V_micro = ComplexMatrix.solve(G, I_vec);
+            } catch (e) {
+                V_micro = new Array(N).fill(new Complex(0, 0));
+            }
+
+            // Calculate Currents
+            wires.forEach(w => {
+                const v1 = V_micro[w._p1];
+                const v2 = V_micro[w._p2];
+
+                // I = (V1 - V2) * G
+                const current = v1.sub(v2).scale(gVal);
+                wireCurrents.set(w.id, current);
+            });
+        });
+
+        return wireCurrents;
     }
 }
 

@@ -7,10 +7,11 @@ class Component {
     static GRID_SIZE = 20;
 
     constructor(type, x, y) {
-        this.id = `${type}_${++Component.idCounter}`;
+        this.id = Component.generateId(type);
         this.type = type;
         this.rotation = 0; // 0, 90, 180, 270 degrees
         this.selected = false;
+        this.showImpedance = false; // Toggle for S-Parameter Graph overlay
         this.params = {};
         this.element = null;
 
@@ -37,6 +38,8 @@ class Component {
         this.x = x;
         this.y = y;
         this.snapTerminalsToGrid();
+
+
     }
 
     /**
@@ -242,16 +245,22 @@ class Component {
         }
 
         this.element.innerHTML = `
+
             ${this.renderHitbox()}
             ${this.renderBody()}
             ${this.renderTerminals()}
             ${this.renderLabel()}
             ${this.renderValue()}
+
         `;
 
         this.updateElement();
         return this.element;
     }
+
+
+
+
 
     /**
      * Calculate impedance at given frequency (override in subclasses)
@@ -272,6 +281,7 @@ class Component {
             y: this.y,
             rotation: this.rotation,
             params: { ...this.params },
+            showImpedance: this.showImpedance,
             connections: { ...this.connections },
             sliderRange: this.sliderRange ? JSON.parse(JSON.stringify(this.sliderRange)) : undefined
         };
@@ -373,6 +383,38 @@ class Component {
         const multiplier = prefix ? (prefixes[prefix] || 1) : 1;
 
         return number * multiplier;
+    }
+    /**
+     * Generate next available ID for component type
+     * Reuses gaps in ID sequence (e.g., if R_1, R_3 exist, generates R_2)
+     */
+    static generateId(type) {
+        // If circuit exists, scan for gaps
+        if (window.circuit) {
+            const existingNums = window.circuit.getAllComponents()
+                .filter(c => c.type === type)
+                .map(c => {
+                    const parts = c.id.split('_');
+                    // Handle cases where ID might not be in standard format
+                    return parts.length > 1 ? parseInt(parts[1]) : 0;
+                })
+                .filter(n => !isNaN(n) && n > 0)
+                .sort((a, b) => a - b);
+
+            let nextNum = 1;
+            for (const num of existingNums) {
+                if (num === nextNum) {
+                    nextNum++;
+                } else if (num > nextNum) {
+                    // Found a gap
+                    break;
+                }
+            }
+            return `${type}_${nextNum}`;
+        }
+
+        // Fallback for when circuit is not initialized (e.g. tests)
+        return `${type}_${++Component.idCounter}`;
     }
 }
 

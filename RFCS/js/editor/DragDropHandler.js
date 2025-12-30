@@ -41,6 +41,49 @@ class DragDropHandler {
 
         // History Snapshot
         this.dragStartSnapshot = null;
+
+        // Context Menu
+        this.contextMenu = new ContextMenu();
+
+        // Wire Selection Mode for Impedance Plot interaction
+        this.wireSelectionMode = null; // { type: 'input'|'ground', callback: fn }
+    }
+
+    /**
+     * Helper to find parent group of a component/wire
+     */
+    findParentGroup(id) {
+        if (!this.circuit) return null;
+        const components = this.circuit.getAllComponents();
+        for (const comp of components) {
+            if (comp.type === 'INTEGRATED') {
+                if (comp.componentIds.includes(id) || comp.wireIds.includes(id)) {
+                    return comp;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Helper to find component at point ignoring specific ID (Drill-down)
+     */
+    findComponentIgnoring(x, y, ignoreId) {
+        const components = this.circuit.getAllComponents();
+        let nearest = null;
+        let minDist = Infinity;
+
+        for (const comp of components) {
+            if (comp.id === ignoreId) continue;
+            if (comp.containsPoint(x, y)) {
+                const dist = Math.sqrt((x - comp.x) ** 2 + (y - comp.y) ** 2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = comp;
+                }
+            }
+        }
+        return nearest;
     }
 
     /**
@@ -58,6 +101,7 @@ class DragDropHandler {
                 const portCount = this.circuit.getAllComponents().filter(c => c.type === 'PORT').length;
                 component = new Port(x, y, portCount + 1);
                 break;
+            case 'Z': component = new ImpedanceBlock(x, y); break;
             default:
                 console.warn('Unknown component type:', type);
                 return null;
@@ -111,6 +155,7 @@ class DragDropHandler {
         this.bindPaletteEvents();
         this.bindCanvasEvents();
         this.bindKeyboardEvents();
+        this.bindContextMenu();
     }
 
     /**
@@ -136,6 +181,7 @@ class DragDropHandler {
             // Start Custom Drag
             this.isDragging = true;
             this.dragType = 'new';
+            this.dragStartClient = { x: e.clientX, y: e.clientY };
 
             // Disable Drawing Tool if active
             if (window.drawingManager && window.drawingManager.activeTool) {
@@ -222,6 +268,55 @@ class DragDropHandler {
 
         // Double-click to edit
         this.svg.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+        // Double-click to edit
+        this.svg.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+    }
+
+    /**
+     * Bind context menu events
+     */
+    bindContextMenu() {
+        this.svg.addEventListener('contextmenu', (e) => this.handleContextMenu(e));
+    }
+
+    /**
+     * Handle context menu
+     */
+    handleContextMenu(e) {
+        e.preventDefault();
+
+        // Identify what was clicked
+        const clickedElement = e.target.closest('.circuit-component');
+        const clickedWire = e.target.closest('.wire, .wire-hitbox');
+
+        let targetComponent = null;
+        let targetType = null;
+
+        if (clickedElement) {
+            const id = clickedElement.dataset.id;
+            targetComponent = this.circuit.getComponent(id);
+            targetType = 'component';
+        } else if (clickedWire) {
+            const id = clickedWire.dataset.id;
+            targetComponent = this.circuit.getWire(id);
+            targetType = 'wire';
+        }
+
+        // ** Check for Parent Group **
+        // If the clicked item is part of a group, we should show the menu for the GROUP,
+        // unless specific override behavior is desired (usually Group takes precedence).
+        if (targetComponent) {
+            const parentGroup = this.findParentGroup(targetComponent.id);
+            if (parentGroup) {
+                targetComponent = parentGroup;
+                targetType = 'component'; // Group is always a component
+            }
+        }
+
+        // Show menu if we have a valid target
+        if (targetComponent) {
+            this.contextMenu.show(e.clientX, e.clientY, targetComponent, targetType);
+        }
     }
 
     /**
@@ -229,8 +324,8 @@ class DragDropHandler {
      */
     bindKeyboardEvents() {
         window.addEventListener('keydown', (e) => {
-            // Don't handle if typing in input
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            // Don't handle if typing in input, select, or textarea
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
 
             const key = e.key.toLowerCase();
 
@@ -279,6 +374,12 @@ class DragDropHandler {
             if (window.shortcutHandler) {
                 // Delete
                 if (window.shortcutHandler.matches(e, 'delete_selected')) {
+                    // Prioritize Drawing Selection Deletion if in Paint Mode (or if drawing is selected)
+                    if (window.drawingManager && window.drawingManager.hasSelection()) {
+                        window.drawingManager.deleteSelectedShape();
+                        return;
+                    }
+
                     if (this.mode === 'select' || (!this.mode && this.circuit.hasSelection())) {
                         this.circuit.deleteSelected();
                         this.canvasManager.renderComponents();
@@ -330,6 +431,20 @@ class DragDropHandler {
     }
 
     /**
+     * Start Wire Selection Mode for Impedance Plot
+     * @param {string} type 'input' or 'ground'
+     * @param {function} callback (wireId) => void
+     */
+    selectWireForImpedance(type, callback) {
+        this.wireSelectionMode = { type, callback };
+        this.svg.style.cursor = 'crosshair';
+        this.svg.classList.add('selecting-wire');
+
+        // Notify user via console or UI toast if available
+        console.log(`[DragDropHandler] Entered Wire Selection Mode: ${type}`);
+    }
+
+    /**
      * Find component at point using hitbox (Falstad-style)
      */
     findComponentAtPoint(x, y) {
@@ -355,7 +470,7 @@ class DragDropHandler {
      * Check if mode is a component placement mode
      */
     isComponentMode(mode) {
-        return ['R', 'L', 'C', 'GND', 'TL', 'PORT'].includes(mode);
+        return ['R', 'L', 'C', 'GND', 'TL', 'PORT', 'Z'].includes(mode);
     }
 
     /**
@@ -367,6 +482,80 @@ class DragDropHandler {
 
         const point = this.canvasManager.clientToSvg(e.clientX, e.clientY);
 
+        // ** Wire Selection Mode Confirmation **
+        if (this.wireSelectionMode) {
+            // 1. Try to find Component Terminal (Priority over Wire if close)
+            let clickedComp = this.findComponentAtPoint(point.x, point.y);
+
+            // ** Drill-down for Group **
+            if (clickedComp && clickedComp.type === 'INTEGRATED') {
+                const internalComp = this.findComponentIgnoring(point.x, point.y, clickedComp.id);
+                if (internalComp && clickedComp.componentIds.includes(internalComp.id)) {
+                    clickedComp = internalComp;
+                }
+            }
+
+            if (clickedComp) {
+                const nearest = clickedComp.getNearestTerminal(point.x, point.y, 15); // 15px threshold
+                if (nearest) {
+                    // Terminal Selected
+                    if (this.wireSelectionMode.callback) {
+                        this.wireSelectionMode.callback(clickedComp.id, nearest.terminal);
+                    }
+                    this.wireSelectionMode = null;
+                    this.svg.style.cursor = 'default';
+                    this.svg.classList.remove('selecting-wire');
+                    // Clear highlights
+                    document.querySelectorAll('.wire-highlight-input, .wire-highlight-ground').forEach(el =>
+                        el.classList.remove('wire-highlight-input', 'wire-highlight-ground')
+                    );
+                    return;
+                }
+            }
+
+            // 2. Try to find Wire
+            // Need to find wire at point manually since event might be blocked or we want precision
+            // But we have clickedWire from event if valid.
+            // If we are over a component, wire might be under it. 
+            // Let's rely on standard hit test if existing logic found one, OR search manually.
+
+            // Re-use clickedWire from top of function or search
+            const clickedWire = e.target.closest('.wire, .wire-hitbox'); // Re-declare or ensure it's available
+            let targetWire = clickedWire;
+
+            // If no wire from DOM click, try to find one spatially (for Group internal wires)
+            if (!targetWire) {
+                const wires = this.circuit.getAllWires();
+                const tolerance = 5;
+                for (const wire of wires) {
+                    if (this.wireIntersectsRect(wire, { x: point.x - tolerance, y: point.y - tolerance, width: tolerance * 2, height: tolerance * 2 })) {
+                        // Simple hit test
+                        targetWire = wire;
+                        break;
+                    }
+                }
+            }
+
+            if (targetWire) {
+                const wireId = targetWire.dataset ? targetWire.dataset.id : targetWire.id;
+                if (this.wireSelectionMode.callback) {
+                    this.wireSelectionMode.callback(wireId, null); // null terminal means wire
+                }
+                this.wireSelectionMode = null;
+                this.svg.style.cursor = 'default';
+                this.svg.classList.remove('selecting-wire');
+                // Clear highlights
+                document.querySelectorAll('.wire-highlight-input, .wire-highlight-ground').forEach(el =>
+                    el.classList.remove('wire-highlight-input', 'wire-highlight-ground')
+                );
+                return;
+            }
+
+            // If clicked nothing relevant, maybe cancel? or keep waiting.
+            // For now, keep waiting unless ESC key (cancelCurrentAction).
+            return;
+        }
+
         // ** Click-to-Place Component **
         if (this.isComponentMode(this.mode)) {
             this.createComponent(this.mode, point.x, point.y);
@@ -376,14 +565,52 @@ class DragDropHandler {
 
         // Identify what was clicked
         let clickedElement = e.target.closest('.circuit-component');
-        const clickedWire = e.target.closest('.wire');
+        const clickedWire = e.target.closest('.wire, .wire-hitbox');
         const clickedTerminal = e.target.closest('.terminal');
         const clickedValue = e.target.closest('.component-value');
+        const clickedDrawing = e.target.closest('.drawing-shape');
 
         // Hitbox-based selection: if no direct element click, search by coordinates
         let hitboxComponent = null;
         if (!clickedElement && !clickedWire && !clickedTerminal) {
             hitboxComponent = this.findComponentAtPoint(point.x, point.y);
+        }
+
+
+
+        // ** Paint Mode (Idle) Selection Logic **
+        // Relaxed check: Check isPaintMode directly, as 'this.mode' might be null in Idle state
+        if (window.drawingManager && window.drawingManager.isPaintMode && !window.drawingManager.activeTool) {
+            if (clickedDrawing) {
+                window.drawingManager.selectShape(clickedDrawing.id);
+
+                // FORCE DISABLE PANNING (Fix for Drag vs Pan conflict)
+                if (this.canvasManager.isPanning) {
+                    this.canvasManager.isPanning = false;
+                    this.svg.classList.remove('panning');
+                }
+
+                this.isDragging = true;
+                this.dragType = 'move';
+                this.dragItemType = 'drawing';
+                this.dragItem = clickedDrawing; // element
+                this.lastDragPoint = { x: point.x, y: point.y };
+
+                // Snapshot for History
+                this.dragStartSnapshot = {
+                    type: 'paint_move',
+                    id: clickedDrawing.id,
+                    startX: point.x,
+                    startY: point.y
+                };
+
+                window.inlineSlider?.hide(); // Force hide slider
+                return;
+            } else {
+                // Clicked empty space in Paint Idle -> Clear selection
+                window.drawingManager.clearSelection();
+                // Allow panning? Yes, standard fallback.
+            }
         }
 
         // ** Auto-Select Logic (Deselect -> Select) **
@@ -437,6 +664,8 @@ class DragDropHandler {
             return; // WireManager will handle the event
         }
 
+
+
         // ** Auto-Wire Logic: If clicked on a terminal in Select mode **
         if (this.mode === 'select' && clickedTerminal) {
             // Check if already connected
@@ -489,11 +718,53 @@ class DragDropHandler {
         }
 
         // Handle component selection (direct click or hitbox)
-        const component = clickedElement
+        let component = clickedElement
             ? this.circuit.getComponent(clickedElement.dataset.id)
             : hitboxComponent;
 
+        // ** 2-Step Group Selection Logic **
+        // 1. If clicked IntegratedComponent -> Check if we should drill down
+        if (component && component.type === 'INTEGRATED' && component.selected) {
+            // Drill down: Search for internal components
+            const internalComp = this.findComponentIgnoring(point.x, point.y, component.id);
+            if (internalComp) {
+                // Check if it belongs to this group
+                if (component.componentIds.includes(internalComp.id)) {
+                    component = internalComp;
+                    clickedElement = null; // Reset DOM tracking to rely on logic
+                }
+            } else {
+                // Try searching for wires? (Optional, but good for completeness)
+                // This requires wire spatial search which is complex. 
+                // Assuming wires are clickable if not fully covered, or user clicks component.
+            }
+        }
+
+        // 2. If clicked Component is part of a Group -> Check if we should select Group instead
+        if (component && component.type !== 'INTEGRATED') {
+            const group = this.findParentGroup(component.id);
+            if (group && !group.selected && !e.shiftKey) {
+                // First click: Select Group instead of Child
+                component = group;
+            }
+        }
+
+        // 3. Same logic for Wires
+        if (clickedWire) {
+            const wireId = clickedWire.dataset.id;
+            const group = this.findParentGroup(wireId);
+            if (group && !group.selected && !e.shiftKey) {
+                // Redirect click to Group Component
+                // We need to set 'component' to group, and clear 'clickedWire' to avoid wire logic
+                component = group;
+                // Don't process as wire anymore
+                // But we need to ensure flow falls into 'if (component)' block
+            }
+        }
+
         if (component) {
+
+
             // Check if clicking on a terminal with an existing connection
             if (clickedTerminal) {
                 const terminal = clickedTerminal.dataset.terminal;
@@ -797,15 +1068,32 @@ class DragDropHandler {
                         wire.moveBy(dx, dy);
                         this.checkWireDisconnection(wire);
                     });
+                } else if (this.dragItemType === 'drawing') {
+                    // Move Drawing Shape
+                    const currentSvg = this.canvasManager.clientToSvg(e.clientX, e.clientY);
+                    // We need raw delta from last point
+                    const dx = currentSvg.x - this.lastDragPoint.x;
+                    const dy = currentSvg.y - this.lastDragPoint.y;
 
-                    // Update connected wires for components
-                    this.updateConnectedWires();
+                    // console.log('DragDropHandler: Moving drawing', this.dragItem.id, dx, dy);
+
+
+                    if (dx !== 0 || dy !== 0) {
+                        if (window.drawingManager) {
+                            window.drawingManager.moveShape(this.dragItem.id, dx, dy);
+                        }
+                        this.lastDragPoint = { x: currentSvg.x, y: currentSvg.y };
+                    }
                 }
-            } else if (this.dragType === 'new' && this.ghostComponent) {
-                // Already handled by common updateGhostPosition above
-                // But we maintain this block for clarity or future specific logic
+
+                // Update connected wires for components
+                this.updateConnectedWires();
             }
+        } else if (this.dragType === 'new' && this.ghostComponent) {
+            // Already handled by common updateGhostPosition above
+            // But we maintain this block for clarity or future specific logic
         }
+
 
         if (this.isSelecting) {
             this.updateSelectionBox(point.x, point.y);
@@ -855,8 +1143,9 @@ class DragDropHandler {
                     }
                 }
 
-            } else if (this.dragType === 'move') {
-                // Save History: Move
+
+            } else if (this.dragType === 'move' && this.dragItemType !== 'drawing') {
+                // Save History: Move (Components/Wires)
                 if (this.dragStartSnapshot && this.dragStartSnapshot.type === 'move') {
                     const moves = [];
 
@@ -884,63 +1173,79 @@ class DragDropHandler {
                         }
                     });
 
-                    if (moves.length > 0) {
-                        this.circuit.saveHistory('move', { items: moves });
-                        this.circuit.notifyChange(); // Trigger Simulation & Render
+                    this.circuit.saveHistory('move', { items: moves });
+                    this.circuit.notifyChange(); // Trigger Simulation & Render
+                }
+            } else if (this.dragStartSnapshot && this.dragStartSnapshot.type === 'paint_move') {
+                // Save History: Paint Move
+                // Calculate total delta
+                const currentSvg = this.canvasManager.clientToSvg(e.clientX, e.clientY);
+                // Use snapped point if appropriate, but drawing usually free-moves or is guided by move logic
+                // Here we just use the final point vs start snapshot point
+                const dx = currentSvg.x - this.dragStartSnapshot.startX;
+                const dy = currentSvg.y - this.dragStartSnapshot.startY;
+
+                if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+                    if (window.circuit) {
+                        window.circuit.saveHistory('paint_circuit_move', {
+                            id: this.dragStartSnapshot.id,
+                            dx: dx,
+                            dy: dy
+                        }, true); // true = isPaintAction
                     }
                 }
-
-                // Cleanup visual state
-                if (this.dragItem && this.dragItem.element) {
-                    this.dragItem.element.classList.remove('dragging');
-                }
-
-                this.circuit.updateSpatialConnections();
-
             } else if (this.dragType === 'new') {
                 // New Component Placement
                 if (this.ghostComponent) {
-                    // Check if we are inside the canvas
-                    // Simple check: if we are over the svg (e.target is svg or child)
-                    // But events bubble to window.
-                    // Let's use coordinate check or element from point?
-                    // Coordinate check relative to SVG limits?
-                    // Or just strict: e.target.closest('#circuitCanvas')
-
                     const onCanvas = e.target.closest('svg') === this.svg;
 
                     if (onCanvas) {
                         this.createComponent(this.dragNewType, this.ghostComponent.x, this.ghostComponent.y);
-                        // Mode: Stay in mode OR Reset?
-                        // User expectation for "Drag from Palette": Single placement?
-                        // Usually drag-and-drop is one-off.
-                        // So we clear mode/ghost.
                         this.setMode(null);
                     } else {
-                        // Dropped outside? Cancel.
-                        this.setMode(null);
+                        // Check for Click-to-Select (dropped outside canvas with minimal movement)
+                        const dx = e.clientX - (this.dragStartClient ? this.dragStartClient.x : e.clientX);
+                        const dy = e.clientY - (this.dragStartClient ? this.dragStartClient.y : e.clientY);
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < 5) {
+                            // Clicked on palette -> Enter Mode
+                            this.setMode(this.dragNewType);
+                        } else {
+                            // Dragged out and cancelled
+                            this.setMode(null);
+                        }
                     }
                 }
                 this.dragNewType = null;
-            } else if (this.dragItem) {
-                if (this.dragItemType === 'component' && this.dragItem.element) {
-                    this.dragItem.element.classList.remove('dragging');
-                    // 이동 후 자동 연결 시도 (For components only)
-                    this.autoConnectTerminals(this.dragItem);
-                } else if (this.dragItemType === 'wire') {
-                    // Wires reconnection
-                    this.autoConnectWire(this.dragItem);
-                }
-
-                // Update spatial connections and global render (for direct connections)
-                this.circuit.updateSpatialConnections();
-                this.canvasManager.renderComponents();
             }
-            this.isDragging = false;
-            this.dragType = null;
-            this.dragItem = null;
-            this.dragItemType = null;
+
+            // Cleanup visual state
+            if (this.dragItem && this.dragItem.element) {
+                this.dragItem.element.classList.remove('dragging');
+            }
+
+            this.circuit.updateSpatialConnections();
+
+        } else if (this.dragItem) {
+            if (this.dragItemType === 'component' && this.dragItem.element) {
+                this.dragItem.element.classList.remove('dragging');
+                // 이동 후 자동 연결 시도 (For components only)
+                this.autoConnectTerminals(this.dragItem);
+            } else if (this.dragItemType === 'wire') {
+                // Wires reconnection
+                this.autoConnectWire(this.dragItem);
+            }
+
+            // Update spatial connections and global render (for direct connections)
+            this.circuit.updateSpatialConnections();
+            this.canvasManager.renderComponents();
         }
+        this.isDragging = false;
+        this.dragType = null;
+        this.dragItem = null;
+        this.dragItemType = null;
+
 
         if (this.isSelecting) {
             // Auto-Deselect: If selecting empty space (tiny box) in Select Mode
@@ -968,16 +1273,26 @@ class DragDropHandler {
         const clickedElement = e.target.closest('.circuit-component');
         if (clickedElement) {
             const id = clickedElement.dataset.id;
-            const component = this.circuit.getComponent(id);
+            let component = this.circuit.getComponent(id);
+
+            // ** Double Click Drill-down **
+            // If Group is double-clicked, try to find internal component to edit
+            if (component && component.type === 'INTEGRATED') {
+                const point = this.canvasManager.clientToSvg(e.clientX, e.clientY);
+                const internalComp = this.findComponentIgnoring(point.x, point.y, component.id);
+
+                if (internalComp && component.componentIds.includes(internalComp.id)) {
+                    component = internalComp;
+                }
+            }
+
             if (component) {
-                // Hide inline slider before opening modal
-                window.inlineSlider?.hide();
                 // Open component parameter modal
                 window.componentModal?.open(component);
             }
         } else if (!this.mode) {
-            // Reset View on double-click empty space (if no tool selected)
-            this.canvasManager.resetView();
+            // Fit View to Content on double-click empty space (if no tool selected)
+            this.canvasManager.fitToContent();
         }
     }
 
@@ -1420,6 +1735,12 @@ class DragDropHandler {
 
         this.removeGhost();
 
+        if (this.wireSelectionMode) {
+            this.wireSelectionMode = null;
+            this.svg.style.cursor = 'default';
+            this.svg.classList.remove('selecting-wire');
+        }
+
         this.circuit.clearSelection();
     }
 
@@ -1472,7 +1793,6 @@ class DragDropHandler {
             }
         }
     }
-
     /**
      * Auto-connect wire terminals to nearby components
      */

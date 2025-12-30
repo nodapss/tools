@@ -11,9 +11,14 @@ class ScriptModal {
         this.tabs = document.querySelectorAll('.script-tab');
         this.panels = document.querySelectorAll('.script-panel');
         this.circuitEditor = document.getElementById('circuitScriptEditor');
+        this.falstadEditor = document.getElementById('falstadScriptEditor');
         this.graphEditor = document.getElementById('graphScriptEditor');
         this.graphSubTabsContainer = document.getElementById('graphSubTabs');
         this.btnAddGraphTab = document.getElementById('btnAddGraphTab');
+
+        // Include Paint Checkbox
+        this.chkIncludePaint = document.getElementById('chkScriptIncludePaint');
+        this.leftControls = document.getElementById('scriptModalLeftControls');
 
         // State Management
         // activeMainTab: 'circuit' or 'graph'
@@ -114,6 +119,19 @@ class ScriptModal {
                 overlay.addEventListener('click', () => this.cancel());
             }
         }
+
+        // Include Paint Toggle
+        if (this.chkIncludePaint) {
+            this.chkIncludePaint.addEventListener('change', () => {
+                this.reloadCircuitJson();
+            });
+        }
+    }
+
+    reloadCircuitJson() {
+        const json = this.generateCircuitJson();
+        this.circuitEditor.value = json;
+        this.workingState.circuitJson = json;
     }
 
     handleEditorKeydown(e) {
@@ -139,8 +157,12 @@ class ScriptModal {
 
             // 4. Update UI
             this.circuitEditor.value = this.workingState.circuitJson;
+            this.loadCurrentCircuitToFalstad(); // Populate Falstad
             this.renderGraphTabs();
             this.updateGraphEditorContent();
+
+            // Ensure UI reflects the active main tab (this fixes the visibility issue)
+            this.switchMainTab(this.activeMainTab);
 
             this.modal.classList.add('active');
         }
@@ -162,7 +184,11 @@ class ScriptModal {
 
     loadCurrentCircuitToCommitted() {
         // Generates JSON from current window.circuit and updates committedState.circuitJson
-        if (!window.circuit) return;
+        this.committedState.circuitJson = this.generateCircuitJson();
+    }
+
+    generateCircuitJson() {
+        if (!window.circuit) return '';
 
         try {
             const circuitData = window.circuit.toJSON();
@@ -193,9 +219,29 @@ class ScriptModal {
                 timestamp: new Date().toISOString()
             };
 
-            this.committedState.circuitJson = JSON.stringify(saveData, null, 2);
+            // Include Paint Data (Based on Checkbox if available, else default to false for consistency, or true if modal not involved?)
+            // Actually, if this method is called from SaveModal context it might differ, but this is ScriptModal method.
+            // Checkbox priority.
+            const includePaint = this.chkIncludePaint ? this.chkIncludePaint.checked : false;
+
+            if (includePaint && window.drawingManager) {
+                saveData.paint = window.drawingManager.getPaintData();
+            }
+
+            return JSON.stringify(saveData, null, 2);
         } catch (e) {
-            console.error('Failed to load current circuit into state', e);
+            console.error('Failed to generate circuit JSON', e);
+            return '';
+        }
+    }
+
+    loadCurrentCircuitToFalstad() {
+        if (!this.falstadEditor) return;
+
+        if (window.FalstadConverter && window.circuit) {
+            this.falstadEditor.value = window.FalstadConverter.export(window.circuit);
+        } else {
+            this.falstadEditor.value = 'Falstad Converter not loaded or Circuit not found.';
         }
     }
 
@@ -216,6 +262,11 @@ class ScriptModal {
                 p.classList.remove('active');
             }
         });
+
+        // Toggle Checkbox Visibility
+        if (this.leftControls) {
+            this.leftControls.style.visibility = (tabName === 'circuit') ? 'visible' : 'hidden';
+        }
     }
 
     // --- Graph Tab Management (Operates on Working State) ---
@@ -360,6 +411,12 @@ class ScriptModal {
                     if (document.getElementById('freqEnd')) document.getElementById('freqEnd').value = data.simulation.freqEnd;
                     if (document.getElementById('freqEndUnit')) document.getElementById('freqEndUnit').value = data.simulation.freqEndUnit;
                     if (document.getElementById('freqPoints')) document.getElementById('freqPoints').value = data.simulation.freqPoints;
+                }
+
+                // Paint Data
+                if (data.paint && window.drawingManager) {
+                    console.log('[ScriptModal] Loading paint data...');
+                    window.drawingManager.loadPaintData(data.paint);
                 }
 
                 // Graph Settings

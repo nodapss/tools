@@ -80,9 +80,257 @@
     color: var(--text-secondary);
 }
 
+
 .frequency-settings label:first-child {
     margin-left: 0;
 }
+
+/* ===== Current Simulation Settings ===== */
+/* ===== Current Simulation Settings ===== */
+/* ===== Floating Flow Button ===== */
+/* ===== Floating Flow Button ===== */
+/* ===== Quick Settings Sidebar ===== */
+.quick-settings-sidebar {
+    position: absolute;
+    top: 0;
+    right: -250px;
+    /* Hidden by default */
+    width: 250px;
+    height: 100%;
+    /* Full height of container */
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-lg);
+    z-index: 200;
+    /* High z-index */
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+.quick-settings-sidebar.open {
+    right: 0;
+    /* Slide in */
+}
+
+/* Toggle Button (Attached to Sidebar) */
+.sidebar-toggle-btn {
+    position: absolute;
+    left: -32px;
+    /* Hang off the left edge */
+    top: 110px;
+    width: 32px;
+    height: 32px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-right: none;
+    /* Merge with sidebar */
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    color: var(--text-secondary);
+    font-family: monospace;
+    /* For arrows */
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: -2px 0 4px rgba(0, 0, 0, 0.1);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-toggle-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* Sidebar Content */
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-tertiary);
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Setting Sections */
+.setting-section {
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.sidebar-menu-btn {
+    text-align: left;
+    justify-content: flex-start;
+    border: none;
+    border-radius: 0;
+    padding: var(--spacing-md);
+    background: transparent;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.sidebar-menu-btn:hover {
+    background: var(--bg-hover);
+}
+
+.sidebar-sub-panel {
+    padding: var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+/* Reusing existing input styles */
+.sidebar-sub-panel .setting-group {
+    display: flex;
+    align-items: center;
+    /* justify-content: space-between; Removed to allow better custom alignment */
+    gap: var(--spacing-sm);
+}
+
+.sidebar-sub-panel .setting-group-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.sidebar-sub-panel .setting-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.sidebar-sub-panel .aligned-label,
+.sidebar-sub-panel .aligned-label-spacer {
+    min-width: 70px;
+    /* Fixed width for alignment */
+    display: inline-block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.sidebar-sub-panel .setting-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: var(--spacing-xs);
+    display: block;
+    width: 100%;
+}
+
+.sidebar-sub-panel .vertical-divider.horizontal {
+    width: 100%;
+    height: 1px;
+    background: var(--border-secondary);
+    margin: var(--spacing-xs) 0;
+}
+
+.sidebar-sub-panel .small-text-input {
+    width: 70px;
+    padding: 2px 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+
+    border-radius: var(--radius-xs);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: right;
+}
+
+.sidebar-sub-panel input[type="range"] {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-secondary);
+    border-radius: 2px;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.sidebar-sub-panel input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--accent-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.current-settings .setting-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* Space out label and input */
+    gap: var(--spacing-sm);
+}
+
+.current-settings label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.current-settings .small-text-input {
+    width: 60px;
+    padding: 2px 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: right;
+}
+
+.current-settings input[type="range"] {
+    flex: 1;
+    /* Fill remaining space */
+    height: 4px;
+    background: var(--bg-secondary);
+    border-radius: 2px;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    min-width: 60px;
+}
+
+.current-settings input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--accent-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.current-settings .vertical-divider {
+    width: 100%;
+    /* Full width */
+    height: 1px;
+    /* Horizontal line */
+    background: var(--border-primary);
+    margin: 2px 0;
+}
+
 
 /* ===== Main Content ===== */
 .main-content {
@@ -182,8 +430,7 @@
     background: var(--bg-primary);
     /* Changed to match sidebar background for panel gap */
     overflow: hidden;
-    padding: var(--spacing-md);
-    /* Add padding for panel look */
+    padding: 0;
 }
 
 /* ===== Circuit Panel (New Wrapper) ===== */

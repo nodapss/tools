@@ -62,6 +62,8 @@ class Toolbar {
                     if (window.drawingManager.isPaintMode) {
                         // Toggle Off
                         window.drawingManager.exitPaintMode();
+                        // Explicitly return to Sheet/Deselect mode when toggling off via button
+                        this.dragDropHandler.setMode(null);
                     } else {
                         // Toggle On (Default to Pen)
                         window.drawingManager.setTool('pen');
@@ -123,53 +125,16 @@ class Toolbar {
      * Save circuit to file
      * Includes simulation parameters and graph settings
      */
+    /**
+     * Save circuit to file
+     * Includes simulation parameters and graph settings
+     */
     saveCircuit() {
-        // Circuit Structure
-        const circuitData = window.circuit.toJSON();
-
-        // Simulation Settings
-        const simSettings = {
-            freqStart: document.getElementById('freqStart')?.value || 1,
-            freqStartUnit: document.getElementById('freqStartUnit')?.value || 1e6,
-            freqEnd: document.getElementById('freqEnd')?.value || 100,
-            freqEndUnit: document.getElementById('freqEndUnit')?.value || 1e6,
-            freqPoints: document.getElementById('freqPoints')?.value || 201
-        };
-
-        // Graph Settings
-        let graphSettings = {};
-        if (window.graphController) {
-            graphSettings = window.graphController.getSettings();
-        } else if (window.sParamGraph) {
-            // Fallback if graphController is not available (should not happen)
-            graphSettings = {
-                format: window.sParamGraph.currentFormat,
-                meas: window.sParamGraph.currentMeas,
-                xAxisScale: window.sParamGraph.currentXAxisScale,
-                animation: window.sParamGraph.config.animation
-            };
+        if (window.saveModal) {
+            window.saveModal.open();
+        } else {
+            console.error('SaveModal not initialized');
         }
-
-        // Construct Save Object
-        const saveData = {
-            version: '1.0',
-            circuit: circuitData,
-            simulation: simSettings,
-            graph: graphSettings,
-            timestamp: new Date().toISOString()
-        };
-
-        const json = JSON.stringify(saveData, null, 2);
-
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'circuit_data.json';
-        a.click();
-
-        URL.revokeObjectURL(url);
     }
 
     /**
@@ -198,6 +163,12 @@ class Toolbar {
                         // 1. Render components first so SVG elements exist
                         window.canvasManager.renderComponents();
                         window.canvasManager.fitToContent();
+
+                        // Load Paint Data
+                        if (data.paint && window.drawingManager) {
+                            console.log('[Toolbar] Loading paint data...');
+                            window.drawingManager.loadPaintData(data.paint);
+                        }
 
                         // Load Simulation Settings
                         if (data.simulation) {

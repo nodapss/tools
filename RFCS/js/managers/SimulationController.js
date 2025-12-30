@@ -16,10 +16,6 @@ class SimulationController {
         this.isFirstSingleShotAfterLoad = true;
         this.currentSimulationFitView = true;
 
-        // Note: graphSettings needs to be accessed. 
-        // Ideally pass a settings object or settings manager.
-        // For now, we will expect graphSettings to be available via window or passed in.
-        // Let's assume window.graphSettingsController for now or pass context.
     }
 
     setGraphSettingsController(controller) {
@@ -33,6 +29,22 @@ class SimulationController {
         this.isFirstSingleShotAfterLoad = pending;
         console.log('Graph reset pending state set to:', pending);
     }
+
+
+
+    /**
+     * Setup event listeners for real-time updates
+     */
+    setupEventListeners() {
+        window.addEventListener('circuit-modified', () => {
+            this.updateRealtime();
+        });
+    }
+
+    /**
+     * Update visualization in real-time if enabled
+     */
+
 
     /**
      * Setup simulation callbacks
@@ -51,6 +63,9 @@ class SimulationController {
                 btn.innerHTML = '<span class="icon">▶</span> Single Shot';
             }
 
+            // Store last sweep results (Graph Data)
+            this.lastSweepResults = results;
+
             // Update graph with results
             if (this.sParamGraph) {
                 this.sParamGraph.setSimulationData(results, this.currentSimulationFitView);
@@ -68,6 +83,8 @@ class SimulationController {
             this.showSummary(results);
 
             console.log('Simulation completed:', results);
+
+
         };
 
         this.calculator.onError = (error) => {
@@ -84,6 +101,8 @@ class SimulationController {
             console.error('Simulation error:', error);
         };
     }
+
+
 
     /**
      * Toggle Run Mode
@@ -149,7 +168,7 @@ class SimulationController {
         }
 
         this.runModeDebounceTimer = setTimeout(() => {
-            this.runSimulation(false); // Preserve zoom
+            this.runSimulation(true); // Always fit view to data
         }, this.RUN_MODE_DEBOUNCE_MS);
     }
 
@@ -161,15 +180,93 @@ class SimulationController {
             this.stopRunMode();
         }
 
-        const shouldFit = this.isFirstSingleShotAfterLoad;
-        await this.runSimulation(shouldFit);
+        // Always fit view on single shot
+        await this.runSimulation(true);
 
         if (this.isFirstSingleShotAfterLoad) {
-            if (this.sParamGraph) {
-                this.sParamGraph.resetZoom();
-            }
             this.isFirstSingleShotAfterLoad = false;
-            console.log('Graph reset executed (First Single Shot after load)');
+        }
+    }
+
+    /**
+     * Plot Impedance for a single component (Simulation based)
+     */
+    async plotSingleComponentImp(component) {
+        if (!component.impedanceConfig) return;
+
+        console.log(`[Debug] plotSingleComponentImp for ${component.id}`, component.impedanceConfig);
+
+        try {
+            const results = await this.calculator.simulateSingleComponent(component);
+
+            if (results && this.sParamGraph) {
+                // Overlay on graph
+                const label = `${component.type}${component.id.split('_').pop()} (Z)`;
+                console.log(`[Debug] Adding Component Trace: ${label}, Points: ${results.zin.length}`);
+                this.sParamGraph.addComponentTrace(label, results.frequencies, results.zin);
+            } else {
+                console.warn('[Debug] No results or graph missing');
+            }
+
+        } catch (error) {
+            console.error("Single Component Sim Failed:", error);
+        }
+    }
+
+    /**
+     * Plot Impedance for a component Group (Sub-circuit)
+     */
+    async plotGroupImp(groupConfig) {
+        if (!groupConfig.enabled) return;
+
+        console.log(`[Debug] plotGroupImp for ${groupConfig.name} (${groupConfig.id})`);
+
+        try {
+            const results = await this.calculator.simulateSubCircuit(groupConfig);
+
+            if (results && this.sParamGraph) {
+                // Overlay on graph
+                const label = groupConfig.name || "Group Plot";
+                console.log(`[Debug] Adding Group Trace: ${label}, Points: ${results.zin.length}`);
+                this.sParamGraph.addComponentTrace(label, results.frequencies, results.zin, groupConfig.color);
+            } else {
+                console.warn('[Debug] Group Sim: No results or graph missing');
+            }
+        } catch (error) {
+            console.error("Group Sim Failed:", error);
+        }
+    }
+
+    /**
+     * Run auxiliary simulations for enabled components AND groups
+     */
+    async runAuxiliarySimulations() {
+        if (!window.circuit) return;
+
+        // 1. Single Components
+        const components = window.circuit.getAllComponents();
+        const enabledComponents = components.filter(c => c.impedanceConfig && c.impedanceConfig.enabled);
+
+        if (enabledComponents.length > 0) {
+            console.log(`[Debug] Running auxiliary simulations for ${enabledComponents.length} components`);
+            for (const comp of enabledComponents) {
+                await this.plotSingleComponentImp(comp);
+            }
+        }
+
+        // 2. Groups
+        const groups = window.circuit.getGroupPlots();
+        const enabledGroups = groups.filter(g => g.enabled);
+
+        if (enabledGroups.length > 0) {
+            console.log(`[Debug] Running auxiliary simulations for ${enabledGroups.length} groups`);
+            for (const group of enabledGroups) {
+                await this.plotGroupImp(group);
+            }
+        }
+
+        if (enabledComponents.length === 0 && enabledGroups.length === 0) {
+            console.log('[Debug] No auxiliary simulations enabled');
         }
     }
 
@@ -177,6 +274,11 @@ class SimulationController {
      * Run simulation
      */
     async runSimulation(fitView = true) {
+        // 1. Clear previous component overlays
+        if (this.sParamGraph && this.sParamGraph.clearComponentTraces) {
+            this.sParamGraph.clearComponentTraces();
+        }
+
         // Check for parameter changes (Frequency Range)
         if (this.calculator && this.calculator.config) {
             const currentConfig = this.calculator.config;
@@ -186,7 +288,6 @@ class SimulationController {
                 if (this.lastSimConfig.freqStart !== currentConfig.freqStart ||
                     this.lastSimConfig.freqEnd !== currentConfig.freqEnd) {
                     fitView = true;
-                    // console.log('Frequency range changed, forcing fitView');
                 }
             }
 
@@ -216,11 +317,6 @@ class SimulationController {
                 // If in Run Mode, we might want to ensure the graph title or other UI elements are updated
                 this.graphSettingsController.updateGraphTitle();
 
-                // Simulate a "complete" for UI consistency
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<span class="icon">▶</span> Single Shot';
-                }
                 return;
             } catch (error) {
                 console.error('Matching Range error:', error);
@@ -240,6 +336,9 @@ class SimulationController {
             const result = await this.calculator.run();
             if (!result.success && window.notificationManager) {
                 window.notificationManager.show(result.error, 'error');
+            } else {
+                // Success! Run enabled component simulations
+                await this.runAuxiliarySimulations();
             }
         } catch (error) {
             if (window.notificationManager) {
@@ -299,4 +398,6 @@ class SimulationController {
             return freq.toFixed(3) + ' Hz';
         }
     }
+
+
 }

@@ -26,11 +26,14 @@ class Capacitor extends Component {
         return `
             <g class="component-body">
                 <!-- Lead lines to terminals -->
-                <line x1="-40" y1="0" x2="-5" y2="0" stroke="currentColor" stroke-width="2"/>
-                <line x1="5" y1="0" x2="40" y2="0" stroke="currentColor" stroke-width="2"/>
-                <!-- Parallel plates -->
-                <line x1="-5" y1="-10" x2="-5" y2="10" stroke="currentColor" stroke-width="2"/>
-                <line x1="5" y1="-10" x2="5" y2="10" stroke="currentColor" stroke-width="2"/>
+                <g class="plate-start">
+                    <line x1="-40" y1="0" x2="-5" y2="0" stroke="currentColor" stroke-width="2"/>
+                    <line x1="-5" y1="-10" x2="-5" y2="10" stroke="currentColor" stroke-width="2"/>
+                </g>
+                <g class="plate-end">
+                    <line x1="5" y1="0" x2="40" y2="0" stroke="currentColor" stroke-width="2"/>
+                    <line x1="5" y1="-10" x2="5" y2="10" stroke="currentColor" stroke-width="2"/>
+                </g>
             </g>
         `;
     }
@@ -42,6 +45,8 @@ class Capacitor extends Component {
         const valueStr = Component.formatValue(this.params.capacitance, 'F');
         return `<text class="component-value" x="0" y="18" text-anchor="middle">${valueStr}</text>`;
     }
+
+
 
     /**
      * Calculate impedance: Z = 1/(jωC) = -j/(ωC)
@@ -65,6 +70,7 @@ class Capacitor extends Component {
         const capacitor = new Capacitor(data.x, data.y, data.params.capacitance);
         capacitor.id = data.id;
         capacitor.rotation = data.rotation;
+        if (data.showImpedance !== undefined) capacitor.showImpedance = data.showImpedance;
         capacitor.connections = data.connections;
         if (data.sliderRange) {
             capacitor.sliderRange = data.sliderRange;

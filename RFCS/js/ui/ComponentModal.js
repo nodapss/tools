@@ -91,6 +91,25 @@ class ComponentModal {
                     defaultMax: { value: 1, unit: 'm' }
                 }
             ],
+            'Z': [
+                {
+                    name: 'resistance',
+                    label: 'Resistance (Real)',
+                    units: ['mΩ', 'Ω', 'kΩ', 'MΩ'],
+                    defaultUnit: 'Ω',
+                    defaultMin: { value: 0, unit: 'Ω' },
+                    defaultMax: { value: 100, unit: 'Ω' }
+                },
+                {
+                    name: 'reactance',
+                    label: 'Reactance (Imag)',
+                    units: ['mΩ', 'Ω', 'kΩ', 'MΩ'], // Include same units
+                    defaultUnit: 'Ω',
+                    defaultMin: { value: -100, unit: 'Ω' },
+                    defaultMax: { value: 100, unit: 'Ω' },
+                    disableAutoRange: false
+                }
+            ],
             'GND': []  // Ground has no editable parameters
         };
 
@@ -149,6 +168,7 @@ class ComponentModal {
             'C': 'Capacitor',
             'PORT': 'Port',
             'TL': 'Transmission Line',
+            'Z': 'Impedance Block',
             'GND': 'Ground'
         };
         this.modalTitle.textContent = `${typeNames[component.type] || component.type} Settings`;
@@ -178,7 +198,21 @@ class ComponentModal {
      * Generate modal content HTML
      */
     generateContent(component, config) {
-        return config.map((paramConfig, index) => {
+        // ID Input Section
+        const idSection = `
+            <div class="param-section" style="margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+                <label class="param-label">Component ID</label>
+                <div class="value-row">
+                    <input type="text" 
+                           class="value-input" 
+                           id="componentIdInput" 
+                           value="${component.id}" 
+                           style="width: 100%; text-align: left;">
+                </div>
+            </div>
+        `;
+
+        const paramsHtml = config.map((paramConfig, index) => {
             const currentValue = component.params[paramConfig.name];
             const { displayValue, displayUnit } = this.convertToDisplay(currentValue, paramConfig);
 
@@ -199,6 +233,8 @@ class ComponentModal {
 
             return this.createParamSection(paramConfig, displayValue, displayUnit, index);
         }).join('');
+
+        return idSection + paramsHtml;
     }
 
     /**
@@ -253,7 +289,6 @@ class ComponentModal {
                             <input type="number" 
                                    class="range-input" 
                                    id="min_${config.name}" 
-                                   id="min_${config.name}" 
                                    value="${this.paramStates[config.name].minValue}"
                                    step="${step}">
                             <select class="range-unit" id="minUnit_${config.name}">
@@ -264,7 +299,6 @@ class ComponentModal {
                             <label>Max</label>
                             <input type="number" 
                                    class="range-input" 
-                                   id="max_${config.name}" 
                                    id="max_${config.name}" 
                                    value="${this.paramStates[config.name].maxValue}"
                                    step="${step}">
@@ -510,6 +544,9 @@ class ComponentModal {
     /**
      * Convert base value to display value with appropriate unit
      */
+    /**
+     * Convert base value to display value with appropriate unit
+     */
     convertToDisplay(baseValue, config) {
         const units = config.units;
         const multipliers = units.map(u => this.UNIT_MULTIPLIERS[u] || 1);
@@ -518,14 +555,19 @@ class ComponentModal {
         let bestUnit = config.defaultUnit;
         let bestValue = baseValue / (this.UNIT_MULTIPLIERS[bestUnit] || 1);
 
+        const absBaseValue = Math.abs(baseValue); // Use absolute value for unit check
+
         for (let i = 0; i < units.length; i++) {
-            const testValue = baseValue / multipliers[i];
+            const absTestValue = absBaseValue / multipliers[i];
+
             // Fix floating point precision: treat very close to 1000 as 1000 (move to next unit)
             // e.g., 999.999999 should not be valid for this unit if next unit is 1.0
             const epsilon = 1e-6;
-            if (testValue >= 1 - epsilon && testValue < 1000 - epsilon) {
+
+            // Allow 0 to be unitless or base unit, but if it has value:
+            if (absTestValue >= 1 - epsilon && absTestValue < 1000 - epsilon) {
                 bestUnit = units[i];
-                bestValue = testValue;
+                bestValue = baseValue / multipliers[i]; // Keep sign
                 break;
             }
         }
@@ -636,6 +678,29 @@ class ComponentModal {
      * (이미 실시간으로 적용되어 있으므로 그냥 닫기)
      */
     applyChanges() {
+        // Handle Rename Logic
+        const idInput = document.getElementById('componentIdInput');
+        if (this.currentComponent && idInput) {
+            const newId = idInput.value.trim();
+            const oldId = this.currentComponent.id;
+
+            if (newId !== oldId) {
+                if (!newId) {
+                    alert('ID cannot be empty.');
+                    return; // Don't close modal
+                }
+
+                // Check for uniqueness provided by Circuit.renameComponent return value
+                // Or check beforehand if desired, but renameComponent returns success boolean
+                const success = window.circuit?.renameComponent(oldId, newId);
+
+                if (!success) {
+                    alert('Failed to rename component. ID might already exist or be invalid.');
+                    return; // Don't close modal
+                }
+            }
+        }
+
         // 원래 값 데이터 클리어 (복원 방지)
         this.originalParams = null;
 

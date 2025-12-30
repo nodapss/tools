@@ -14,11 +14,15 @@ class SParameterGraph {
         this.simulationData = null;
         this.simulationResults = null;  // 전체 시뮬레이션 결과 저장
 
+        // Data containers
+        this.simulationResults = null;
+        this.simulationData = null;
+        this.csvDatasets = []; // Array of { rawData, metadata, processedData, color }
+        this.componentImpedanceDatasets = []; // Dynamic component traces, metadata: {}, color: '...' }
+        this.componentTracesForSmith = []; // Smith Chart Traces
+
         // Hover State
         this.hoveredDatasetIndex = null;
-
-        // CSV 데이터셋 배열로 관리
-        this.csvDatasets = []; // Array of { rawData: [], processedData: {}, metadata: {}, color: '...' }
 
         // Format/Meas 설정
         this.currentFormat = 'logMag';  // logMag, linMag, phase, swr, delay, smith
@@ -40,6 +44,7 @@ class SParameterGraph {
             yMin: -50,
             yMax: 0,
             autoScale: true,
+            xAxis: { autoScale: true, min: 1000000, max: 100000000 },
             autoScale: true,
             absoluteImag: true, // Default to true (Absolute Value) for Lin R, X
             highlightNegative: false // Highlight negative imaginary values in Lin R, X
@@ -260,8 +265,25 @@ class SParameterGraph {
             }
         });
 
-        // Double-click to reset zoom
-        this.canvas.ondblclick = () => {
+        // Double-click to reset zoom or open settings
+        this.canvas.ondblclick = (event) => {
+            if (!this.chart) return;
+
+            const { offsetX, offsetY } = event;
+            const scales = this.chart.scales;
+
+            // Check if click is on Y-axis (left of X-axis start)
+            if (scales.x && offsetX < scales.x.left) {
+                this.canvas.dispatchEvent(new CustomEvent('axis-dblclick', { detail: { axis: 'y' } }));
+                return;
+            }
+
+            // Check if click is on X-axis (below Y-axis end)
+            if (scales.y && offsetY > scales.y.bottom) {
+                this.canvas.dispatchEvent(new CustomEvent('axis-dblclick', { detail: { axis: 'x' } }));
+                return;
+            }
+
             this.resetZoom();
         };
 
@@ -269,6 +291,11 @@ class SParameterGraph {
         window.addEventListener('marker-hover', (e) => {
             this.highlightedMarkerId = e.detail.hovering ? e.detail.id : null;
             this.chart.update('none');
+
+            // Dispatch to Smith Chart Renderer if in Smith Mode
+            if (this.isSmithChartMode && this.smithChartRenderer) {
+                this.smithChartRenderer.setHighlightedMarker(this.highlightedMarkerId);
+            }
         });
 
         // Listen for marker edit request from table
@@ -473,6 +500,8 @@ class SParameterGraph {
                 x: {
                     type: this.currentXAxisScale, // Dynamic
                     position: 'bottom',
+                    min: (this.config.xAxis && !this.config.xAxis.autoScale) ? this.config.xAxis.min : undefined,
+                    max: (this.config.xAxis && !this.config.xAxis.autoScale) ? this.config.xAxis.max : undefined,
                     grid: {
                         color: this.colors.grid,
                         borderColor: '#444'
@@ -650,6 +679,15 @@ class SParameterGraph {
     }
 
     /**
+     * Set X-Axis Config
+     */
+    setXAxisConfig(config) {
+        if (!config) return;
+        this.config.xAxis = config;
+        this.updateChart(true);
+    }
+
+    /**
      * 측정 항목 설정
      */
     setMeas(meas) {
@@ -696,7 +734,33 @@ class SParameterGraph {
         }
 
         this.refreshData();
-        this.updateMarkerTableHeaders();
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.draw();
+        }
+
+        // Update Component Impedance Data (New Feature)
+        this.updateComponentImpedanceData();
+    }
+
+    setShowInputImpedance(visible) {
+        this.showInputImpedance = visible;
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.setShowPortImpedance(visible);
+        }
+    }
+
+    setZ0(z0) {
+        this.z0 = z0;
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.setZ0(z0);
+        }
+    }
+
+    setPortImpedance(zin) {
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.portImpedance = { r: zin.real, x: zin.imag };
+            this.smithChartRenderer.draw();
+        }
     }
 
     // ============ Smith Chart & Legend Management ============
@@ -736,6 +800,14 @@ class SParameterGraph {
         smithCanvas.style.display = 'block';
 
         this.smithChartRenderer = new SmithChartRenderer(smithCanvas.id, this.markerManager);
+        // Apply stored settings
+        if (this.showInputImpedance !== undefined) {
+            // Also setting Z0 if available
+            if (this.z0) {
+                this.smithChartRenderer.setZ0(this.z0);
+            }
+            this.smithChartRenderer.setShowPortImpedance(this.showInputImpedance);
+        }
 
         // Pass data if exists
         if (this.matchingRangeData) {
@@ -1387,7 +1459,92 @@ class SParameterGraph {
             this.smithChartRenderer.draw();
         }
 
+        // Update Component Impedance Data (New Feature)
+        this.updateComponentImpedanceData();
+
         this.updateMarkerTableHeaders();
+    }
+
+    updateComponentImpedanceData() {
+        // Reset data containers
+        this.componentImpedanceDatasets = [];
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.setComponentTraces([]);
+        }
+
+        // Require Simulation Results (for frequencies)
+        if (!this.simulationResults || !this.simulationResults.frequencies || this.simulationResults.frequencies.length === 0) {
+            return;
+        }
+
+        const frequencies = this.simulationResults.frequencies;
+        const componentTracesForSmith = [];
+
+        // Iterate all components in the circuit
+        if (window.circuit) {
+            const components = window.circuit.getAllComponents();
+            const z0 = (this.simulationResults.config && this.simulationResults.config.z0) ? this.simulationResults.config.z0 : 50;
+
+            // Palette for distinct colors
+            const colors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe'];
+            let colorIdx = 0;
+
+            components.forEach(comp => {
+                // Must have showImpedance enabled and implement getImpedance
+                if (!comp.showImpedance || typeof comp.getImpedance !== 'function') return;
+
+                const color = colors[colorIdx % colors.length];
+                colorIdx++;
+
+                const zinData = [];
+                const smithPoints = [];
+
+                frequencies.forEach(f => {
+                    const zRaw = comp.getImpedance(f);
+                    if (!zRaw) {
+                        zinData.push(null);
+                        return;
+                    }
+
+                    // Ensure z is a Complex instance
+                    const z = new Complex(zRaw.real, zRaw.imag);
+                    zinData.push(z);
+
+                    // Smith Chart Data (Gamma) ALWAYS calculated for Smith view
+                    const rNorm = z.real / z0;
+                    const xNorm = z.imag / z0;
+                    const den = (rNorm + 1) * (rNorm + 1) + xNorm * xNorm;
+                    let gr = 1, gi = 0;
+                    if (den !== 0) {
+                        gr = ((rNorm * rNorm) + (xNorm * xNorm) - 1) / den;
+                        gi = (2 * xNorm) / den;
+                    }
+                    smithPoints.push({ real: gr, imag: gi, freq: f, impedance: { r: z.real, x: z.imag } });
+                });
+
+                // Standardize Dataset Storage: Store RAW Z + Freqs
+                // This allows updateChart to handle S11 conversion dynamically
+                this.componentImpedanceDatasets.push({
+                    label: `${comp.id} (Z)`, // Label might need update based on mode? keeping generic for now
+                    frequencies: frequencies,
+                    zin: zinData,
+                    color: color,
+                    visible: true
+                });
+
+                // Add to Smith Traces (Directly)
+                componentTracesForSmith.push({
+                    label: comp.id,
+                    points: smithPoints,
+                    color: color
+                });
+            });
+        }
+
+        // Pass to SmithChartRenderer
+        if (this.smithChartRenderer && this.isSmithChartMode) {
+            this.smithChartRenderer.setComponentTraces(componentTracesForSmith);
+        }
     }
 
     /**
@@ -1433,8 +1590,8 @@ class SParameterGraph {
                         }
                     }
 
-                    dataR.push({ x: point.frequency, y: real });
-                    dataX.push({ x: point.frequency, y: this.config.absoluteImag ? Math.abs(imag) : imag });
+                    dataR.push({ x: point.frequency, y: real, complex: { r: real, x: imag } });
+                    dataX.push({ x: point.frequency, y: this.config.absoluteImag ? Math.abs(imag) : imag, complex: { r: real, x: imag } });
                 });
 
                 // Style: Real (Original Color), Imag (Complementary/Different Color)
@@ -1578,7 +1735,7 @@ class SParameterGraph {
 
                 dataset.processedData = {
                     label: dataset.label || `Data ${this.csvDatasets.indexOf(dataset) + 1}`,
-                    data: dataset.rawData.map((point, i) => ({ x: point.frequency, y: yData[i] })),
+                    data: dataset.rawData.map((point, i) => ({ x: point.frequency, y: yData[i], complex: { r: point.s11_real || (yData[i] && !isNaN(yData[i]) ? yData[i] : 0), x: point.s11_imag || 0 } })),
                     borderColor: this.getDynamicBorderColor(dataset.color),
                     borderWidth: this.getDynamicBorderWidth(),
                     backgroundColor: dataset.color,
@@ -1608,7 +1765,7 @@ class SParameterGraph {
                         const phaseRad = phaseDeg * (Math.PI / 180);
                         real = mag * Math.cos(phaseRad); imag = mag * Math.sin(phaseRad);
                     }
-                    return { real: real, imag: imag };
+                    return { real: real, imag: imag, impedance: { r: real, x: imag } };
                 });
                 loadedPaths.push({ points: points });
             });
@@ -1685,14 +1842,183 @@ class SParameterGraph {
      * 차트 업데이트
      */
     /**
+     * Y-Axis 설정 변경
+     * @param {Object} config - { autoScale: boolean, min: number, max: number }
+     */
+    setYAxisConfig(config) {
+        if (!config) return;
+        this.config.autoScale = config.autoScale;
+        if (config.min !== undefined) this.config.yMin = config.min;
+        if (config.max !== undefined) this.config.yMax = config.max;
+
+        this.updateChart(true);
+    }
+
+    /**
+     * Clear all component overlay traces
+     */
+    clearComponentTraces() {
+        this.componentImpedanceDatasets = [];
+        this.componentTracesForSmith = [];
+
+        // Update Smith Chart
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.setComponentTraces([]);
+        }
+
+        // Force update to remove them from chart
+        // The updateChart() method will rebuild datasets from simulationData + csv + componentTraces
+        this.updateChart();
+    }
+
+    /**
+     * Helper: HSL to Hex
+     */
+    hslToHex(h, s, l) {
+        l /= 100;
+        const a = s * Math.min(l, 1 - l) / 100;
+        const f = n => {
+            const k = (n + h / 30) % 12;
+            const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+            return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return `#${f(0)}${f(8)}${f(4)}`;
+    }
+
+    /**
+     * Add a component impedance trace to the graph
+     * @param {string} label - Name of the component (e.g. "C1")
+     * @param {Array} frequencies - Array of frequency points
+     * @param {Array} zinData - Array of Complex impedance values
+     * @param {string} [color=null] - Optional hex color code
+     */
+    addComponentTrace(label, frequencies, zinData, color = null) {
+        console.log(`[Debug] SParameterGraph.addComponentTrace: ${label}, Freqs: ${frequencies ? frequencies.length : 0}, Zin: ${zinData ? zinData.length : 0}, Color: ${color}`);
+
+        // Generate a vibrant color based on label hash if not provided
+        if (!color) {
+            let hash = 0;
+            for (let i = 0; i < label.length; i++) {
+                hash = label.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            // Use Hash to map to Hue (0-360)
+            const hue = Math.abs(hash % 360);
+            // Fixed Saturation (70%) and Lightness (50%) for vibrant colors
+            color = this.hslToHex(hue, 70, 50);
+        } else if (color.startsWith('hsl')) {
+            // Normalize HSL string to Hex for compatibility
+            const match = color.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+)%,\s*(\d+)%\)/);
+            if (match) {
+                const h = parseFloat(match[1]);
+                const s = parseInt(match[2]);
+                const l = parseInt(match[3]);
+                color = this.hslToHex(h, s, l);
+            }
+        }
+
+
+        this.componentImpedanceDatasets.push({
+            label: label,
+            frequencies: frequencies,
+            zin: zinData,
+            color: color,
+            visible: true
+        });
+
+        // --- Smith Chart Integration ---
+        const z0 = (this.simulationResults && this.simulationResults.config && this.simulationResults.config.z0) ? this.simulationResults.config.z0 : 50;
+        const smithPoints = [];
+
+        frequencies.forEach((f, i) => {
+            let z = zinData[i];
+
+            // Robust Complex Validation
+            if (!z) return;
+            let real, imag;
+
+            if (typeof z.real === 'number' && typeof z.imag === 'number') {
+                real = z.real;
+                imag = z.imag;
+            } else if (typeof z.magnitude === 'function') {
+                // It is a Complex instance
+                real = z.real;
+                imag = z.imag;
+            } else {
+                // Unknown format? Skip or zero
+                return;
+            }
+
+            // Convert Z -> Gamma
+            // Gamma = (Z - Z0) / (Z + Z0)
+
+            let gr, gi;
+
+            // Handle Infinity (Open Circuit)
+            if (!isFinite(real) || real > 1e15) {
+                gr = 1;
+                gi = 0;
+            } else {
+                // NormZ = Z / Z0 = (r + jx)
+                const rNorm = real / z0;
+                const xNorm = imag / z0;
+
+                // Gamma = (NormZ - 1) / (NormZ + 1)
+                // ( (r-1) + jx ) / ( (r+1) + jx )
+                const den = (rNorm + 1) * (rNorm + 1) + xNorm * xNorm;
+                if (den === 0) return; // Should not happen if r >= 0
+
+                gr = ((rNorm * rNorm) + (xNorm * xNorm) - 1) / den;
+                gi = (2 * xNorm) / den;
+            }
+
+            smithPoints.push({
+                real: gr,
+                imag: gi,
+                freq: f,
+                impedance: { r: real, x: imag }
+            });
+        });
+
+        this.componentTracesForSmith.push({
+            label: label,
+            points: smithPoints,
+            color: color
+        });
+
+        console.log(`[Debug] Trace Added. Total Traces in Graph: ${this.componentTracesForSmith.length}`);
+
+        if (this.smithChartRenderer) {
+            this.smithChartRenderer.setComponentTraces(this.componentTracesForSmith);
+        }
+
+        this.updateChart();
+    }
+
+    /**
+     * Helper: Convert Complex Value to Y-axis value based on format
+     */
+    convertValue(complexVal, format) {
+        if (!complexVal) return null;
+        switch (format) {
+            case 'logMag': return 20 * Math.log10(complexVal.magnitude() + 1e-12);
+            case 'linMag': return complexVal.magnitude();
+            case 'phase': return complexVal.phase() * (180 / Math.PI);
+            case 'swr': return complexVal.magnitude(); // For Z, SWR is not directly Z mag, but let's map mag
+            case 'linRabsX': return complexVal.real; // Just Real part?
+            default: return complexVal.magnitude();
+        }
+    }
+
+    /**
      * 차트 업데이트
-     * @param {boolean} fitView - Whether to auto-scale the Y-axis
+     * @param {boolean} fitView - Whether to auto-scale the Y-axis (ignored if manual scale is set)
      */
     updateChart(fitView = true) {
         if (!this.chart) return;
 
         const datasets = [];
 
+        // 1. Main Simulation Data
         if (this.simulationData && this.config.showSimulation) {
             if (Array.isArray(this.simulationData)) {
                 datasets.push(...this.simulationData);
@@ -1701,6 +2027,7 @@ class SParameterGraph {
             }
         }
 
+        // 2. CSV Data
         if (this.config.showCsv && this.csvDatasets.length > 0) {
             this.csvDatasets.forEach(ds => {
                 if (ds.processedData) {
@@ -1713,10 +2040,166 @@ class SParameterGraph {
             });
         }
 
+        // Add Component Impedance Datasets
+        if (this.componentImpedanceDatasets && this.componentImpedanceDatasets.length > 0) {
+            const currentFormat = this.currentFormat || 'logMag';
+
+            this.componentImpedanceDatasets.forEach(ds => {
+
+                // Special Handling for Lin R, X
+                if (currentFormat === 'linRabsX') {
+                    const dataR = [];
+                    const dataX = [];
+
+                    if (ds.zin && ds.frequencies) {
+                        for (let i = 0; i < ds.frequencies.length; i++) {
+                            let z = ds.zin[i];
+                            // Ensure Complex
+                            if (z && typeof z.magnitude !== 'function') {
+                                if (window.Complex) {
+                                    z = new window.Complex(z.real || 0, z.imag || 0);
+                                }
+                            }
+
+                            if (z) {
+                                // For Component Impedance, we usually just want Z itself.
+                                // But if user is in S-Parameter Meas logic... wait, Component Impedance Trace
+                                // should probably ALWAYS be Z, regardless of Meas mode (S11 etc).
+                                // The trace is explicitly "Component Impedance".
+                                // However, keeping consistent with conversion logic below if needed.
+                                // ACTUALLY: addComponentTrace is explicitly Z.
+
+                                const valR = z.real;
+                                const valX = this.config.absoluteImag ? Math.abs(z.imag) : z.imag;
+
+                                dataR.push({ x: ds.frequencies[i], y: valR });
+                                dataX.push({ x: ds.frequencies[i], y: valX });
+                            }
+                        }
+                    }
+
+                    // 1. Real Part Dataset
+                    datasets.push({
+                        ...ds, // copies label, color, etc.
+                        label: ds.label + ' (R)',
+                        data: dataR,
+                        borderColor: ds.color,
+                        backgroundColor: ds.color,
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1
+                    });
+
+                    // 2. Imaginary Part Dataset
+                    // Generate secondary color (Shifted)
+                    const imagColor = this.getShiftedColor(ds.color, 180); // Complementary
+
+                    datasets.push({
+                        ...ds,
+                        label: ds.label + (this.config.absoluteImag ? ' (|X|)' : ' (X)'),
+                        data: dataX,
+                        borderColor: imagColor,
+                        backgroundColor: imagColor,
+                        borderWidth: 2,
+                        borderDash: [5, 5], // Dashed for imaginary
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1
+                    });
+
+                } else {
+                    // Standard Handling (Single Dataset)
+                    const dataPoints = [];
+                    if (ds.zin && ds.frequencies) {
+                        for (let i = 0; i < ds.frequencies.length; i++) {
+                            let z = ds.zin[i];
+                            // Ensure Complex
+                            if (z && typeof z.magnitude !== 'function') {
+                                // Re-create complex if it was lost (e.g. JSON serialization)
+                                if (window.Complex) {
+                                    z = new window.Complex(z.real || 0, z.imag || 0);
+                                }
+                            }
+
+                            if (z) {
+                                // Check Measurement Mode
+                                let valToConvert = z;
+                                const isSParamMeas = this.currentMeas && this.currentMeas.toUpperCase().startsWith('S');
+
+                                if (isSParamMeas) {
+                                    // Convert Z to Gamma
+                                    const z0 = (this.simulationResults && this.simulationResults.config && this.simulationResults.config.z0) ? this.simulationResults.config.z0 : 50;
+                                    // Gamma = (Z - Z0) / (Z + Z0)
+                                    const r = z.real;
+                                    const x = z.imag;
+                                    const den = Math.pow(r + z0, 2) + Math.pow(x, 2);
+
+                                    if (den === 0) {
+                                        // Should not happen for passive Z+Z0
+                                        valToConvert = new window.Complex(1, 0);
+                                    } else {
+                                        const gr = (r * r - z0 * z0 + x * x) / den;
+                                        const gi = (2 * z0 * x) / den;
+                                        valToConvert = new window.Complex(gr, gi);
+                                    }
+                                }
+
+                                const yVal = this.convertValue(valToConvert, currentFormat);
+                                dataPoints.push({ x: ds.frequencies[i], y: yVal });
+                            }
+                        }
+                    }
+
+                    // Clone dataset to avoid mutating original source
+                    datasets.push({
+                        ...ds,
+                        data: dataPoints,
+                        borderColor: ds.color,
+                        backgroundColor: ds.color,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1
+                    });
+                }
+            });
+        }
+
         this.chart.data.datasets = datasets;
 
-        // Y축 자동 스케일 (fitView가 true일 때만 실행)
-        // Calculate Global Min/Max X and Y
+        // Y축 스케일링 로직
+        // Manual Scale (Fixed)
+        if (!this.config.autoScale) {
+            // Check if Y-axis exists (it might not for Smith/Polar charts)
+            if (this.chart.options.scales && this.chart.options.scales.y) {
+                this.chart.options.scales.y.min = this.config.yMin;
+                this.chart.options.scales.y.max = this.config.yMax;
+            }
+
+            // Update Zoom Limits if plugin exists
+            if (this.chart.options.plugins.zoom && this.chart.options.plugins.zoom.limits && this.chart.options.scales.y) {
+                // Keep limits in sync if manual
+            }
+        }
+
+        // X-Axis Manual Scale
+        if (this.config.xAxis && !this.config.xAxis.autoScale) {
+            if (this.chart.options.scales && this.chart.options.scales.x) {
+                this.chart.options.scales.x.min = this.config.xAxis.min;
+                this.chart.options.scales.x.max = this.config.xAxis.max;
+            }
+            if (this.chart.options.plugins.zoom && this.chart.options.plugins.zoom.limits) {
+                this.chart.options.plugins.zoom.limits.x = {
+                    min: this.config.xAxis.min,
+                    max: this.config.xAxis.max,
+                    minRange: (this.config.xAxis.max - this.config.xAxis.min) * 0.01
+                };
+            }
+        }
+
+        // Auto Scale (Fit View)
         if (datasets.length > 0 && fitView) {
             let minY = Infinity;
             let maxY = -Infinity;
@@ -1724,6 +2207,8 @@ class SParameterGraph {
             let maxX = -Infinity;
 
             datasets.forEach(ds => {
+                if (!ds.data || ds.hidden) return;
+                // console.log(`[Graph] AutoScale DS: ${ds.label}, Len: ${ds.data.length}`);
                 ds.data.forEach(point => {
                     // Y Axis Calc
                     if (isFinite(point.y)) {
@@ -1761,36 +2246,44 @@ class SParameterGraph {
             }
 
             // Apply Y-Axis Auto Scale & Limits
-            if (this.config.autoScale && isFinite(paddedMinY) && isFinite(paddedMaxY)) {
+            if (this.config.autoScale !== false && isFinite(paddedMinY) && isFinite(paddedMaxY)) {
                 // Set initial view
-                this.chart.options.scales.y.min = paddedMinY;
-                this.chart.options.scales.y.max = paddedMaxY;
-
-                // Ensure limits object exists
-                if (!this.chart.options.plugins.zoom.limits) {
-                    this.chart.options.plugins.zoom.limits = {};
+                if (this.chart.options.scales.y) {
+                    this.chart.options.scales.y.min = paddedMinY;
+                    this.chart.options.scales.y.max = paddedMaxY;
                 }
 
-                // Set Zoom/Pan Limits
-                this.chart.options.plugins.zoom.limits.y = {
-                    min: paddedMinY,
-                    max: paddedMaxY,
-                    minRange: (paddedMaxY - paddedMinY) * 0.01
-                };
+                // Ensure limits object exists
+                if (this.chart.options.plugins.zoom) {
+                    if (!this.chart.options.plugins.zoom.limits) {
+                        this.chart.options.plugins.zoom.limits = {};
+                    }
+
+                    // Set Zoom/Pan Limits
+                    this.chart.options.plugins.zoom.limits.y = {
+                        min: paddedMinY,
+                        max: paddedMaxY,
+                        minRange: (paddedMaxY - paddedMinY) * 0.01
+                    };
+                }
             }
 
             // Apply X-Axis Auto Scale & Limits
-            if (isFinite(paddedMinX) && isFinite(paddedMaxX)) {
+            if (isFinite(paddedMinX) && isFinite(paddedMaxX) && (!this.config.xAxis || this.config.xAxis.autoScale)) {
                 // Set initial view
-                this.chart.options.scales.x.min = paddedMinX;
-                this.chart.options.scales.x.max = paddedMaxX;
+                if (this.chart.options.scales.x) {
+                    this.chart.options.scales.x.min = paddedMinX;
+                    this.chart.options.scales.x.max = paddedMaxX;
+                }
 
-                // Set Zoom/Pan Limits
-                this.chart.options.plugins.zoom.limits.x = {
-                    min: paddedMinX,
-                    max: paddedMaxX,
-                    minRange: (paddedMaxX - paddedMinX) * 0.01
-                };
+                if (this.chart.options.plugins.zoom) {
+                    // Set Zoom/Pan Limits
+                    this.chart.options.plugins.zoom.limits.x = {
+                        min: paddedMinX,
+                        max: paddedMaxX,
+                        minRange: (paddedMaxX - paddedMinX) * 0.01
+                    };
+                }
             }
         }
 
@@ -1886,6 +2379,7 @@ class SParameterGraph {
         this.csvData = null; // Legacy
         this.csvRawData = null; // Legacy
         this.csvDatasets = []; // Clear all CSV datasets
+        this.componentImpedanceDatasets = []; // Clear Impedance Plots
         this.updateChart();
     }
 
@@ -2225,6 +2719,9 @@ class SParameterGraph {
                     const closest = this.getClosestDataPoint(valX);
                     if (closest) {
                         updates.y = closest.y;
+                        if (closest.complex) {
+                            updates.complexData = closest.complex;
+                        }
                     }
                 }
 

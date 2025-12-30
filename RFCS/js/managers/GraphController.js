@@ -12,6 +12,11 @@ class GraphController {
             format: 'logMag',
             meas: 'impedance',
             xAxisScale: 'linear',
+            xAxis: {
+                autoScale: true,
+                min: 1000000,
+                max: 100000000
+            },
             animation: false,
             // Matching Range specific settings
             matchingRange: {
@@ -23,7 +28,14 @@ class GraphController {
             },
             absoluteImag: true, // Default to true
             highlightNegative: false, // Default to false (Red Highlight for negative imag)
-            showMarkerValue: false // Default to false (Hidden)
+            highlightNegative: false, // Default to false (Red Highlight for negative imag)
+            showMarkerValue: false, // Default to false (Hidden)
+            showInputImpedance: false, // Default to false (Hidden for Smith Chart)
+            yAxis: {
+                autoScale: true,
+                min: -100,
+                max: 0
+            }
         };
 
         // Initialize DOM events
@@ -52,12 +64,10 @@ class GraphController {
             });
         }
 
-        // Bind reset zoom
-        const btnResetZoom = document.getElementById('btnResetZoom');
-        if (btnResetZoom) {
-            btnResetZoom.addEventListener('click', () => {
-                if (this.sParamGraph) this.sParamGraph.resetZoom();
-            });
+        // Bind Clear Graph
+        const btnClearGraph = document.getElementById('btnClearGraph');
+        if (btnClearGraph) {
+            btnClearGraph.addEventListener('click', () => this.handleClearGraph());
         }
 
         // Bind graph settings button
@@ -124,6 +134,68 @@ class GraphController {
                 this.setSettings(event.data.settings);
             }
         });
+
+        // Bind Axis Double Click Event from SParameterGraph
+        if (this.sParamGraph && this.sParamGraph.canvas) {
+            this.sParamGraph.canvas.addEventListener('axis-dblclick', (e) => {
+                this.handleAxisDoubleClick(e.detail.axis);
+            });
+        }
+    }
+
+    /**
+     * Handle Axis Double Click
+     * Opens Settings Modal, switches to Display tab, disables Auto Scale, and focuses Min input
+     * @param {string} axis 'x' or 'y'
+     */
+    handleAxisDoubleClick(axis) {
+        // 1. Open Settings Modal
+        this.openSettingsModal();
+
+        // 2. Switch to Display Tab
+        const modal = document.getElementById('graphSettingsModal');
+        if (!modal) return;
+
+        // Display Tab Button
+        const displayTabBtn = modal.querySelector('.settings-tab[data-tab="display"]');
+        if (displayTabBtn) {
+            displayTabBtn.click();
+        }
+
+        // 3. Handle Specific Axis Logic
+        if (axis === 'y') {
+            // Y-Axis Logic
+            const yAxisAutoScale = document.getElementById('yAxisAutoScale');
+            const yAxisMin = document.getElementById('yAxisMin');
+
+            if (yAxisAutoScale && yAxisAutoScale.checked) {
+                yAxisAutoScale.click(); // Uncheck and trigger change handler
+            }
+
+            // Focus and Select Min Input
+            if (yAxisMin) {
+                setTimeout(() => {
+                    yAxisMin.focus();
+                    yAxisMin.select();
+                }, 100); // Slight delay for modal interaction
+            }
+
+        } else if (axis === 'x') {
+            // X-Axis Logic
+            const xAxisAutoScale = document.getElementById('xAxisAutoScale');
+            const xAxisMin = document.getElementById('xAxisMin');
+
+            if (xAxisAutoScale && xAxisAutoScale.checked) {
+                xAxisAutoScale.click(); // Uncheck and trigger change handler
+            }
+
+            if (xAxisMin) {
+                setTimeout(() => {
+                    xAxisMin.focus();
+                    xAxisMin.select();
+                }, 100);
+            }
+        }
     }
 
     /**
@@ -692,6 +764,26 @@ class GraphController {
                 components.forEach(comp => comp.setMatchingHighlight(false));
             }
         }
+
+        // Handle Smith Chart Options Visibility
+        const smithChartOptions = document.getElementById('smithChartOptions');
+        if (smithChartOptions && formatSelect) {
+            // Show if (Meas is SParam or Impedance OR MatchingRange) AND (Format is Smith)
+            // matchingRange force sets format to smith, so checking format is usually sufficient if we trust sync.
+            // But let's be explicit.
+            const isSmithFormat = formatSelect.value === 'smith';
+            // Allow for S-Param/Impedance modes as well as Matching Range
+            // Actually user requested: "Meas가 Sparameter/Impedance 일 때... Format이 Smith Chart"
+            // For matchingRange, we might want it too, but let's prioritize the request.
+            // Matching range usually ALWAYS shows input impedance (Yellow Triangle) effectively as start point? 
+            // Or maybe user wants to toggle it there too. 
+            // For now, enable for any Smith Chart format.
+            if (isSmithFormat) {
+                smithChartOptions.style.display = 'block';
+            } else {
+                smithChartOptions.style.display = 'none';
+            }
+        }
     }
 
     openSettingsModal() {
@@ -710,16 +802,172 @@ class GraphController {
             const linRXAbsolute = document.getElementById('linRXAbsolute');
             const linRXHighlightNegative = document.getElementById('linRXHighlightNegative');
             const showMarkerValue = document.getElementById('showMarkerValueGlobal');
+            const smithInputImpedance = document.getElementById('smithInputImpedance');
+            const smithChartFreq = document.getElementById('smithChartFreq');
+            const smithChartFreqUnit = document.getElementById('smithChartFreqUnit');
 
             if (formatSelect) formatSelect.value = this.settings.format;
             if (measSelect) measSelect.value = this.settings.meas;
             if (xAxisSelect) xAxisSelect.value = this.settings.xAxisScale;
+
+            // Y-Axis Scale UI Binding
+            const yAxisAutoScale = document.getElementById('yAxisAutoScale');
+            const yAxisManualInputs = document.getElementById('yAxisManualInputs');
+            const yAxisMin = document.getElementById('yAxisMin');
+            const yAxisMax = document.getElementById('yAxisMax');
+
+            if (yAxisAutoScale) {
+                // Set initial state
+                // Ensure yAxis object exists in settings (for backward compat if loaded from old defaults)
+                if (!this.settings.yAxis) this.settings.yAxis = { autoScale: true, min: -100, max: 0 };
+
+                yAxisAutoScale.checked = this.settings.yAxis.autoScale;
+                yAxisManualInputs.style.opacity = this.settings.yAxis.autoScale ? '0.5' : '1';
+                yAxisManualInputs.style.pointerEvents = this.settings.yAxis.autoScale ? 'none' : 'auto';
+
+                let currentMin = this.settings.yAxis.min;
+                let currentMax = this.settings.yAxis.max;
+
+                // Sync with current graph view if Auto Scale is enabled
+                if (this.settings.yAxis.autoScale && this.sParamGraph && this.sParamGraph.getViewState) {
+                    try {
+                        const viewState = this.sParamGraph.getViewState();
+                        if (viewState && viewState.y && typeof viewState.y.min === 'number' && typeof viewState.y.max === 'number') {
+                            // Use current view values, rounded to 2 decimals
+                            currentMin = parseFloat(viewState.y.min.toFixed(2));
+                            currentMax = parseFloat(viewState.y.max.toFixed(2));
+                        }
+                    } catch (e) {
+                        console.warn('Failed to sync Y-axis view state:', e);
+                    }
+                }
+
+                if (yAxisMin) yAxisMin.value = currentMin;
+                if (yAxisMax) yAxisMax.value = currentMax;
+
+                // Change Event
+                yAxisAutoScale.addEventListener('change', (e) => {
+                    const isAuto = e.target.checked;
+                    yAxisManualInputs.style.opacity = isAuto ? '0.5' : '1';
+                    yAxisManualInputs.style.pointerEvents = isAuto ? 'none' : 'auto';
+                });
+            }
+            if (yAxisAutoScale) {
+                yAxisAutoScale.onclick = () => {
+                    const manualInputs = document.getElementById('yAxisManualInputs');
+                    if (manualInputs) {
+                        if (yAxisAutoScale.checked) {
+                            manualInputs.style.opacity = '0.5';
+                            manualInputs.style.pointerEvents = 'none';
+                        } else {
+                            manualInputs.style.opacity = '1';
+                            manualInputs.style.pointerEvents = 'auto';
+                        }
+                    }
+                };
+                // Trigger initial state
+                yAxisAutoScale.onclick();
+            }
+
+            // --- X-Axis Logic ---
+            // Ensure X-Axis default exists
+            if (!this.settings.xAxis) {
+                this.settings.xAxis = {
+                    autoScale: true,
+                    min: 1000000,
+                    max: 100000000
+                };
+            }
+
+            const xAxisAutoScale = document.getElementById('xAxisAutoScale');
+            const xAxisManualInputs = document.getElementById('xAxisManualInputs');
+            const xAxisMin = document.getElementById('xAxisMin');
+            const xAxisMax = document.getElementById('xAxisMax');
+            const xAxisMinUnit = document.getElementById('xAxisMinUnit');
+            const xAxisMaxUnit = document.getElementById('xAxisMaxUnit');
+
+            if (xAxisAutoScale && xAxisManualInputs && xAxisMin && xAxisMax && xAxisMinUnit && xAxisMaxUnit) {
+                xAxisAutoScale.checked = this.settings.xAxis.autoScale;
+
+                // Smart Init: Determine best unit for current values
+                const minUnitVal = this.determineBestUnit(this.settings.xAxis.min);
+                const maxUnitVal = this.determineBestUnit(this.settings.xAxis.max);
+
+                // Set Units
+                xAxisMinUnit.value = minUnitVal;
+                xAxisMaxUnit.value = maxUnitVal;
+
+                // Set Scaled Values
+                xAxisMin.value = this.settings.xAxis.min / minUnitVal;
+                xAxisMax.value = this.settings.xAxis.max / maxUnitVal;
+
+                // X-Axis Auto Scale Toggle Logic
+                const updateXAxisState = () => {
+                    if (xAxisAutoScale.checked) {
+                        xAxisManualInputs.style.opacity = '0.5';
+                        xAxisManualInputs.style.pointerEvents = 'none';
+                        // Hide if using display:none/flex approach (index.html used display:none initially)
+                        // But our updated HTML uses display: flex style in parent div for toggling.
+                        // Wait, the replaced HTML used style="display: none ..." in HTML source?
+                        // Let's force flex if we want to show it, or check CSS. 
+                        // Actually standard behavior here is just opacity toggle if layout permits.
+                        // But if it was display:none, we need to show it.
+                        // Let's follow Y-axis pattern: visual disable.
+                        // Check if xAxisManualInputs was hidden by default in HTML? 
+                        // Yes, user replaced it with style="display: none; ..." 
+                        // We should show it always? Or only when manual?
+                        // The Y-axis logic in existing code (lines 789-798 above) just toggles opacity/pointerEvents.
+                        // Let's force display:flex if it's currently none to ensure it's seen.
+                        if (xAxisManualInputs.style.display === 'none') xAxisManualInputs.style.display = 'flex';
+                    } else {
+                        xAxisManualInputs.style.opacity = '1';
+                        xAxisManualInputs.style.pointerEvents = 'auto';
+                        if (xAxisManualInputs.style.display === 'none') xAxisManualInputs.style.display = 'flex';
+                    }
+                };
+
+                xAxisAutoScale.onclick = updateXAxisState;
+                updateXAxisState();
+
+                // Auto-Conversion Logic (Smart Unit Binding)
+                const setupAutoConversion = (input, unitSelect) => {
+                    // Store previous unit to calculate conversion ratio
+                    input.dataset.lastUnit = unitSelect.value;
+
+                    unitSelect.onchange = () => {
+                        const oldUnit = parseFloat(input.dataset.lastUnit || 1);
+                        const newUnit = parseFloat(unitSelect.value);
+                        const currentVal = parseFloat(input.value);
+
+                        if (!isNaN(currentVal)) {
+                            // Convert value to maintain actual Frequency
+                            // displayed * oldUnit = newDisplayed * newUnit
+                            // newDisplayed = displayed * (oldUnit / newUnit)
+                            const newVal = currentVal * (oldUnit / newUnit);
+                            input.value = newVal; // Step matches 'any' so decimals are fine
+                        }
+
+                        input.dataset.lastUnit = newUnit;
+                    };
+
+                    // Update lastUnit when user manually types a number? 
+                    // No need, lastUnit tracks the *unit dropdown state*. 
+                    // The number itself changes freely.
+                };
+
+                setupAutoConversion(xAxisMin, xAxisMinUnit);
+                setupAutoConversion(xAxisMax, xAxisMaxUnit);
+            }
+
             if (animationToggle) animationToggle.checked = this.settings.animation;
             if (showMarkerValue) showMarkerValue.checked = (this.settings.showMarkerValue !== undefined) ? this.settings.showMarkerValue : true;
             if (invertReactance) invertReactance.checked = this.settings.matchingRange.invertReactance;
             if (linRXAbsolute) linRXAbsolute.checked = (this.settings.absoluteImag !== undefined) ? this.settings.absoluteImag : true;
             if (linRXHighlightNegative) {
                 linRXHighlightNegative.checked = (this.settings.highlightNegative !== undefined) ? this.settings.highlightNegative : false;
+            }
+            if (smithInputImpedance) {
+                smithInputImpedance.checked = (this.settings.showInputImpedance !== undefined) ? this.settings.showInputImpedance : false;
             }
 
             // Set frequency with appropriate unit
@@ -728,6 +976,14 @@ class GraphController {
                 const { value, unit } = this.frequencyToDisplay(freq);
                 matchingRangeFreq.value = value;
                 matchingRangeFreqUnit.value = unit;
+            }
+
+            // Sync Smith Chart Freq input as well
+            if (smithChartFreq && smithChartFreqUnit) {
+                const freq = this.settings.matchingRange.frequency;
+                const { value, unit } = this.frequencyToDisplay(freq);
+                smithChartFreq.value = value;
+                smithChartFreqUnit.value = unit;
             }
 
             // Set points per edge
@@ -751,6 +1007,8 @@ class GraphController {
 
             // Initial state setup
             this.handleMeasChange();
+
+
 
             // Reset to Measurement Tab
             const tabs = modal.querySelectorAll('.settings-tab');
@@ -818,13 +1076,38 @@ class GraphController {
             this.sParamGraph.setFormat(this.settings.format);
             this.sParamGraph.setMeas(this.settings.meas);
             this.sParamGraph.setXAxisScale(this.settings.xAxisScale);
+            // Apply X-Axis Config
+            if (this.sParamGraph.setXAxisConfig && this.settings.xAxis) {
+                this.sParamGraph.setXAxisConfig(this.settings.xAxis);
+            }
             this.sParamGraph.setAnimation(this.settings.animation);
             this.sParamGraph.setAbsoluteImag(this.settings.absoluteImag);
             this.sParamGraph.setHighlightNegative(this.settings.highlightNegative);
+            // Apply Y-Axis Config
+            if (this.sParamGraph.setYAxisConfig) {
+                this.sParamGraph.setYAxisConfig(this.settings.yAxis);
+            }
             // Apply Show Marker Value
             if (this.sParamGraph.markerManager) {
                 const showVal = this.settings.showMarkerValue !== undefined ? this.settings.showMarkerValue : true;
                 this.sParamGraph.markerManager.setShowValueOnMarker(showVal);
+            }
+            // Apply Show Input Impedance (Smith Chart)
+            if (this.sParamGraph.setShowInputImpedance) {
+                this.sParamGraph.setShowInputImpedance(this.settings.showInputImpedance);
+            }
+            // Ensure Z0 is synced (e.g. if Port impedance changed or mode changed)
+            if (this.sParamGraph.setZ0) {
+                this.sParamGraph.setZ0(this.getCurrentZ0());
+            }
+
+            // Immediate update for Input Impedance Marker in Normal Mode
+            if (this.settings.showInputImpedance && this.settings.meas !== 'matchingRange') {
+                const targetFreq = this.settings.matchingRange.frequency || 50e6;
+                const zin = this.calculateInputImpedance(targetFreq);
+                if (this.sParamGraph.setPortImpedance) {
+                    this.sParamGraph.setPortImpedance(zin);
+                }
             }
         }
 
@@ -863,60 +1146,120 @@ class GraphController {
 
 
     applySettings() {
-        const formatSelect = document.getElementById('formatSelect');
-        const measSelect = document.getElementById('measSelect');
-        const xAxisSelect = document.getElementById('xAxisSelect');
-        const animationToggle = document.getElementById('animationToggle');
-        const invertReactance = document.getElementById('invertReactance');
-        const linRXAbsolute = document.getElementById('linRXAbsolute');
-        const linRXHighlightNegative = document.getElementById('linRXHighlightNegative');
-        const showMarkerValue = document.getElementById('showMarkerValueGlobal');
+        try {
+            const formatSelect = document.getElementById('formatSelect');
+            const measSelect = document.getElementById('measSelect');
+            const xAxisSelect = document.getElementById('xAxisSelect');
+            const animationToggle = document.getElementById('animationToggle');
+            const invertReactance = document.getElementById('invertReactance');
+            const linRXAbsolute = document.getElementById('linRXAbsolute');
+            const linRXHighlightNegative = document.getElementById('linRXHighlightNegative');
+            const showMarkerValue = document.getElementById('showMarkerValueGlobal');
+            const smithInputImpedance = document.getElementById('smithInputImpedance');
 
-        const newSettings = { ...this.settings };
+            const newSettings = { ...this.settings };
 
-        if (formatSelect) newSettings.format = formatSelect.value;
-        if (measSelect) newSettings.meas = measSelect.value;
-        if (xAxisSelect) newSettings.xAxisScale = xAxisSelect.value;
-        if (animationToggle) newSettings.animation = animationToggle.checked;
-        if (showMarkerValue) newSettings.showMarkerValue = showMarkerValue.checked;
-        if (linRXAbsolute) newSettings.absoluteImag = linRXAbsolute.checked;
-        if (linRXHighlightNegative) newSettings.highlightNegative = linRXHighlightNegative.checked;
+            if (formatSelect) newSettings.format = formatSelect.value;
+            if (measSelect) newSettings.meas = measSelect.value;
+            if (xAxisSelect) newSettings.xAxisScale = xAxisSelect.value;
 
-        // Handle Matching Range specific settings
-        if (newSettings.meas === 'matchingRange') {
-            if (invertReactance) newSettings.matchingRange.invertReactance = invertReactance.checked;
+            // X-Axis Settings
+            const xAxisAutoScale = document.getElementById('xAxisAutoScale');
+            const xAxisMin = document.getElementById('xAxisMin');
+            const xAxisMax = document.getElementById('xAxisMax');
+            const xAxisMinUnit = document.getElementById('xAxisMinUnit');
+            const xAxisMaxUnit = document.getElementById('xAxisMaxUnit');
 
-            // Get frequency setting
-            const matchingRangeFreq = document.getElementById('matchingRangeFreq');
-            const matchingRangeFreqUnit = document.getElementById('matchingRangeFreqUnit');
-            if (matchingRangeFreq && matchingRangeFreqUnit) {
-                newSettings.matchingRange.frequency =
-                    parseFloat(matchingRangeFreq.value) * parseFloat(matchingRangeFreqUnit.value);
+            if (xAxisAutoScale) {
+                const parsedMin = parseFloat(xAxisMin.value);
+                const parsedMax = parseFloat(xAxisMax.value);
+                const minUnit = parseFloat(xAxisMinUnit ? xAxisMinUnit.value : 1);
+                const maxUnit = parseFloat(xAxisMaxUnit ? xAxisMaxUnit.value : 1);
+
+                newSettings.xAxis = {
+                    autoScale: xAxisAutoScale.checked,
+                    min: isNaN(parsedMin) ? 1000000 : parsedMin * minUnit,
+                    max: isNaN(parsedMax) ? 100000000 : parsedMax * maxUnit
+                };
             }
 
-            // Get points per edge setting
-            const matchingRangePoints = document.getElementById('matchingRangePoints');
-            if (matchingRangePoints) {
-                newSettings.matchingRange.pointsPerEdge =
-                    Math.max(2, Math.min(1000, parseInt(matchingRangePoints.value) || 20));
+            if (animationToggle) newSettings.animation = animationToggle.checked;
+            if (showMarkerValue) newSettings.showMarkerValue = showMarkerValue.checked;
+            if (linRXAbsolute) newSettings.absoluteImag = linRXAbsolute.checked;
+            if (linRXHighlightNegative) newSettings.highlightNegative = linRXHighlightNegative.checked;
+            if (smithInputImpedance) newSettings.showInputImpedance = smithInputImpedance.checked;
+
+            // Y-Axis Settings
+            const yAxisAutoScale = document.getElementById('yAxisAutoScale');
+            const yAxisMin = document.getElementById('yAxisMin');
+            const yAxisMax = document.getElementById('yAxisMax');
+
+            if (yAxisAutoScale) {
+                const parsedMin = parseFloat(yAxisMin.value);
+                const parsedMax = parseFloat(yAxisMax.value);
+
+                newSettings.yAxis = {
+                    autoScale: yAxisAutoScale.checked,
+                    min: isNaN(parsedMin) ? -100 : parsedMin,
+                    max: isNaN(parsedMax) ? 0 : parsedMax
+                };
             }
 
-            // Collect selected components
-            const checkboxes = document.querySelectorAll('#componentCheckboxes input[type="checkbox"]:checked');
-            newSettings.matchingRange.selectedComponents = Array.from(checkboxes).map(cb => cb.value);
+            // Handle Matching Range specific settings
+            if (newSettings.meas === 'matchingRange') {
+                if (invertReactance) newSettings.matchingRange.invertReactance = invertReactance.checked;
 
-            // Force Smith chart format
-            newSettings.format = 'smith';
+                // Get frequency setting
+                const matchingRangeFreq = document.getElementById('matchingRangeFreq');
+                const matchingRangeFreqUnit = document.getElementById('matchingRangeFreqUnit');
+                if (matchingRangeFreq && matchingRangeFreqUnit) {
+                    newSettings.matchingRange.frequency =
+                        parseFloat(matchingRangeFreq.value) * parseFloat(matchingRangeFreqUnit.value);
+                }
+
+                // Get points per edge setting
+                const matchingRangePoints = document.getElementById('matchingRangePoints');
+                if (matchingRangePoints) {
+                    newSettings.matchingRange.pointsPerEdge =
+                        Math.max(2, Math.min(1000, parseInt(matchingRangePoints.value) || 20));
+                }
+
+                // Collect selected components
+                const checkboxes = document.querySelectorAll('#componentCheckboxes input[type="checkbox"]:checked');
+                newSettings.matchingRange.selectedComponents = Array.from(checkboxes).map(cb => cb.value);
+
+                // Force Smith chart format
+                newSettings.format = 'smith';
+            } else {
+                // Also allow updating frequency if in Smith Chart Normal Mode
+                // because "Show Input Impedance" relies on this frequency
+                const smithChartFreq = document.getElementById('smithChartFreq');
+                const smithChartFreqUnit = document.getElementById('smithChartFreqUnit');
+                if (newSettings.format === 'smith' && smithChartFreq && smithChartFreqUnit) {
+                    const val = parseFloat(smithChartFreq.value);
+                    const unit = parseFloat(smithChartFreqUnit.value);
+                    if (!isNaN(val) && !isNaN(unit)) {
+                        newSettings.matchingRange.frequency = val * unit;
+                    }
+                }
+            }
+
+            // Apply the consolidated settings
+            this.setSettings(newSettings);
+
+            if (window.notificationManager) {
+                window.notificationManager.show(`설정 적용됨: ${this.settings.meas} - ${this.getFormatDisplayName(this.settings.format)}`, 'success');
+            }
+
+            this.closeSettingsModal();
+        } catch (error) {
+            console.error('Failed to apply settings:', error);
+            if (window.notificationManager) {
+                window.notificationManager.show(`설정 적용 실패: ${error.message}`, 'error');
+            }
+            // Attempt to close modal anyway to prevent being stuck
+            this.closeSettingsModal();
         }
-
-        // Apply the consolidated settings
-        this.setSettings(newSettings);
-
-        if (window.notificationManager) {
-            window.notificationManager.show(`설정 적용됨: ${this.settings.meas} - ${this.getFormatDisplayName(this.settings.format)}`, 'success');
-        }
-
-        this.closeSettingsModal();
     }
 
     /**
@@ -1000,6 +1343,14 @@ class GraphController {
         const invertReactance = this.settings.matchingRange.invertReactance;
         const centerFreq = this.settings.matchingRange.frequency || 50e6;
         const n = selectedComponents.length;
+
+        // Dynamic Z0 from Port 1
+        const currentZ0 = this.getCurrentZ0();
+
+        // Update Graph Z0
+        if (this.sParamGraph) {
+            this.sParamGraph.setZ0(currentZ0);
+        }
 
         if (n === 0) {
             return { paths: [], frequency: centerFreq, invertReactance, components: [] };
@@ -1130,6 +1481,20 @@ class GraphController {
     }
 
     /**
+     * Determine best unit for frequency value
+     * @param {number} hz 
+     * @returns {number} unit multiplier
+     */
+    determineBestUnit(hz) {
+        if (!hz || hz === 0) return 1;
+        const absHz = Math.abs(hz);
+        if (absHz >= 1e9) return 1e9;
+        if (absHz >= 1e6) return 1e6;
+        if (absHz >= 1e3) return 1e3;
+        return 1;
+    }
+
+    /**
      * Calculate input impedance at a frequency using the circuit's calculator
      */
     calculateInputImpedance(frequency) {
@@ -1153,7 +1518,7 @@ class GraphController {
      * Convert impedance to reflection coefficient (Gamma)
      */
     impedanceToGamma(z) {
-        const Z0 = 50; // Reference impedance
+        const Z0 = this.getCurrentZ0(); // Dynamic Z0
         let zReal = z.real || z.r || 0;
         let zImag = z.imag || z.i || 0;
 
@@ -1175,6 +1540,23 @@ class GraphController {
         return { real: gammaReal, imag: gammaImag };
     }
 
+
+    /**
+     * Get current Reference Impedance (Z0) from Port 1
+     */
+    getCurrentZ0() {
+        if (!this.circuit) return 50;
+
+        // Find Port 1
+        const components = this.circuit.getAllComponents();
+        const port1 = components.find(c => c.type === 'PORT' && c.params.portNumber === 1);
+
+        if (port1 && port1.params.impedance) {
+            return parseFloat(port1.params.impedance);
+        }
+
+        return 50; // Default
+    }
 
     updateGraphTitle() {
         const titleElement = document.getElementById('graphTitle');
@@ -1332,6 +1714,21 @@ class GraphController {
             // If we are in Matching Range mode, broadcast the newly loaded data
             if (this.settings.meas === 'matchingRange') {
                 this.broadcastLoadedMatchingRangeData();
+            }
+        }
+    }
+
+    handleClearGraph() {
+        if (this.sParamGraph) {
+            this.sParamGraph.clear();
+            if (this.sParamGraph.markerManager && typeof this.sParamGraph.markerManager.clear === 'function') {
+                this.sParamGraph.markerManager.clear();
+            }
+            if (typeof this.sParamGraph.clearMarkers === 'function') {
+                this.sParamGraph.clearMarkers();
+            }
+            if (window.notificationManager) {
+                window.notificationManager.show('Graph cleared', 'info');
             }
         }
     }

@@ -20,6 +20,8 @@ class Wire {
 
         this.selected = false;
         this.element = null;
+
+
     }
 
     /**
@@ -45,9 +47,13 @@ class Wire {
         const path = this.createStraightPath();
 
         this.element.innerHTML = `
+            <path class="wire-hitbox" 
+                  data-id="${this.id}"
+                  d="${path}"/>
             <path class="wire ${this.selected ? 'selected' : ''}" 
                   data-id="${this.id}"
                   d="${path}"/>
+
         `;
 
         return this.element;
@@ -178,6 +184,7 @@ class Wire {
 
         return wire;
     }
+
 }
 
 /**

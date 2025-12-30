@@ -60,6 +60,7 @@ class Resistor extends Component {
         const resistor = new Resistor(data.x, data.y, data.params.resistance);
         resistor.id = data.id;
         resistor.rotation = data.rotation;
+        if (data.showImpedance !== undefined) resistor.showImpedance = data.showImpedance;
         resistor.connections = data.connections;
         if (data.sliderRange) {
             resistor.sliderRange = data.sliderRange;
