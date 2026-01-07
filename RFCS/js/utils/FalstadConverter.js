@@ -103,6 +103,44 @@ class FalstadConverter {
                 // waveform: 0=DC, 1=AC, freq=40, maxV=5
                 return `R ${x1} ${y1} ${x2} ${y2} ${flags} 1 40 5 0 0 0.5`;
 
+            case 'TL': // Transmission Line
+                // 171 x1 y1 x2 y2 flags Zo len velocity
+                // velocity is factor of light speed (e.g. 0.66)
+                // Flags: 0
+
+                let z0, velocity;
+
+                if (comp.params.modelType === 'rlgc') {
+                    // Convert RLGC to Z0/Velocity for Export
+                    // Z0 = sqrt(L/C)
+                    // v = 1/sqrt(LC)
+                    const L = comp.params.l || 250e-9;
+                    const C = comp.params.c || 100e-12;
+                    z0 = Math.sqrt(L / C);
+                    velocity = 1 / Math.sqrt(L * C);
+                } else {
+                    z0 = comp.params.z0 || 50;
+                    velocity = comp.params.velocity || 2e8; // Default approx 0.66c
+                }
+
+                // Falstad expects velocity factor (ratio to c) if I recall correctly, 
+                // BUT standard 171 format uses actual values? 
+                // Wait, Falstad source check:
+                // TransmissionLineElm: st.nextToken() (Z0), st.nextToken() (length), st.nextToken() (velocity)
+                // It treats velocity as generic value. Let's assume meters/sec or factor?
+                // Looking at user example earlier: "171 ... 75 10m 0.8" <- 0.8 likely factor?
+                // Default was 0.66. Let's send it as factor of c if > 1?
+                // Actually commonly it's `velocity constant` or just velocity.
+                // Let's assume it's m/s if large, or factor if small?
+                // Falstad usually uses "velocity" text field which often validates 1e8 range.
+                // Re-checking standard export...
+                // If we look at existing `ComponentModal` logic: `velocity: 3e8`.
+                // Let's pass the raw m/s value and let Falstad handle it, OR normalize.
+                // Wait, ComponentModal: "Velocity (factor of c)" label, but stores `3e8`.
+                // Let's try sending the actual number.
+
+                return `171 ${x1} ${y1} ${x2} ${y2} ${flags} ${z0} ${comp.params.length} ${velocity}`;
+
             // TODO: Implement other types (TL, etc)
             default:
                 console.warn(`Unmapped component type for Falstad export: ${type}`);

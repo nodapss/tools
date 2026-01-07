@@ -140,8 +140,8 @@ class CanvasManager {
         // Note: We check window.dragDropHandler directly as it might not be passed in constructor or might be circular dependency if we try to inject it.
         const noToolSelected = window.dragDropHandler && !window.dragDropHandler.mode;
 
-        // NEW: Check if Drawing Tool is active
-        if (window.drawingManager && window.drawingManager.activeTool) {
+        // NEW: Check if Drawing Tool is active (BUT ignore middle click for panning)
+        if (window.drawingManager && window.drawingManager.activeTool && e.button !== 1) {
             const svgPoint = this.clientToSvg(e.clientX, e.clientY);
             window.drawingManager.handleMouseDown(e, svgPoint);
             return; // Stop propagation to Pan/Select

@@ -292,6 +292,8 @@
 .drawing-shape {
     cursor: pointer;
     transition: filter 0.2s;
+    pointer-events: none;
+    /* Interact only in Paint Mode */
 }
 
 .drawing-shape:hover {
@@ -304,4 +306,23 @@
     /* filter: drop-shadow(0 0 4px #00ffff); */
     /* Filter causes rendering artifacts on siblings. Removed. */
     opacity: 0.6;
+}
+
+/* Paint Mode Overrides */
+.circuit-canvas.paint-mode .circuit-component,
+.circuit-canvas.paint-mode .wire,
+.circuit-canvas.paint-mode .wire-hitbox {
+    cursor: default !important;
+    pointer-events: none;
+    /* Treat circuit elements as background */
+}
+
+.circuit-canvas.paint-mode .drawing-shape {
+    pointer-events: auto;
+    cursor: move;
+}
+
+/* Disable interaction with existing drawings when a drawing tool is active */
+body.drawing-tool-active .circuit-canvas .drawing-shape {
+    pointer-events: none;
 }

@@ -6,9 +6,19 @@ class TransmissionLine extends Component {
     constructor(x, y, z0 = 50, length = 0.1, velocity = 3e8) {
         super('TL', x, y);
         this.params = {
+            modelType: 'standard', // 'standard' or 'rlgc'
+
+            // Standard Params
             z0: z0,              // Characteristic impedance (Ohms)
-            length: length,       // Physical length (meters)
-            velocity: velocity    // Phase velocity (m/s), default is speed of light
+            length: length,      // Physical length (meters)
+            velocity: velocity,  // Phase velocity (m/s)
+            loss: 0,             // Attenuation (dB/m)
+
+            // RLGC Params (per meter)
+            r: 0,                // Resistance (Ohms/m)
+            l: 250e-9,           // Inductance (H/m) - approx for 50ohm
+            g: 0,                // Conductance (S/m)
+            c: 100e-12           // Capacitance (F/m) - approx for 50ohm
         };
 
         // Wider component for transmission line - aligned to grid
@@ -44,77 +54,131 @@ class TransmissionLine extends Component {
      * Render transmission line values
      */
     renderValue() {
-        const z0Str = `${this.params.z0}Ω`;
-        const lengthStr = Component.formatValue(this.params.length, 'm');
-        return `
-            <text class="component-value" x="0" y="22" text-anchor="middle">${z0Str}, ${lengthStr}</text>
-        `;
+        const lenStr = Component.formatValue(this.params.length, 'm');
+
+        if (this.params.modelType === 'rlgc') {
+            return `
+                <text class="component-value" x="0" y="22" text-anchor="middle">RLGC, ${lenStr}</text>
+            `;
+        } else {
+            const z0Str = `${this.params.z0}Ω`;
+            const lossStr = this.params.loss > 0 ? `, ${this.params.loss}dB/m` : '';
+            return `
+                <text class="component-value" x="0" y="22" text-anchor="middle">${z0Str}, ${lenStr}${lossStr}</text>
+            `;
+        }
     }
 
     /**
-     * Calculate electrical length (β * l)
-     * β = ω/v = 2πf/v
+     * Complex Hyperbolic Functions Helper
+     * cosh(x + jy) = cosh(x)cos(y) + j sinh(x)sin(y)
+     * sinh(x + jy) = sinh(x)cos(y) + j cosh(x)sin(y)
      */
-    getElectricalLength(frequency) {
-        const beta = (2 * Math.PI * frequency) / this.params.velocity;
-        return beta * this.params.length;
+    static complexCosh(alpha, beta) {
+        return {
+            real: Math.cosh(alpha) * Math.cos(beta),
+            imag: Math.sinh(alpha) * Math.sin(beta)
+        };
+    }
+
+    static complexSinh(alpha, beta) {
+        return {
+            real: Math.sinh(alpha) * Math.cos(beta),
+            imag: Math.cosh(alpha) * Math.sin(beta)
+        };
     }
 
     /**
      * Get ABCD matrix for transmission line
-     * [A B]   [cos(βl)      jZ0*sin(βl)]
-     * [C D] = [j/Z0*sin(βl) cos(βl)    ]
+     * Supports both Standard (Lossy) and RLGC models
      */
     getABCDMatrix(frequency) {
-        const theta = this.getElectricalLength(frequency);
-        const z0 = this.params.z0;
+        const w = 2 * Math.PI * frequency;
+        const len = this.params.length;
 
-        const cosTheta = Math.cos(theta);
-        const sinTheta = Math.sin(theta);
+        let alpha, beta; // Propagation constant components: gamma = alpha + j*beta
+        let Zc; // Characteristic Impedance (Complex)
 
-        return {
-            A: { real: cosTheta, imag: 0 },
-            B: { real: 0, imag: z0 * sinTheta },
-            C: { real: 0, imag: sinTheta / z0 },
-            D: { real: cosTheta, imag: 0 }
-        };
-    }
+        if (this.params.modelType === 'rlgc') {
+            // RLGC Model
+            const R = this.params.r;
+            const L = this.params.l;
+            const G = this.params.g;
+            const C = this.params.c;
 
-    /**
-     * Calculate input impedance when terminated with ZL
-     * Zin = Z0 * (ZL + jZ0*tan(βl)) / (Z0 + jZL*tan(βl))
-     */
-    getInputImpedance(frequency, zLoad) {
-        const theta = this.getElectricalLength(frequency);
-        const z0 = this.params.z0;
-        const tanTheta = Math.tan(theta);
+            // Z = R + jwL
+            const Z_series = new Complex(R, w * L);
+            // Y = G + jwC
+            const Y_shunt = new Complex(G, w * C);
 
-        // Complex arithmetic
-        // Zin = Z0 * (ZL + jZ0*tan(θ)) / (Z0 + jZL*tan(θ))
+            // Gamma = sqrt(Z * Y)
+            const gammaSq = Z_series.mul(Y_shunt);
+            // Sqrt of complex number (a+bi)
+            // r = sqrt(a^2+b^2), phi = atan2(b,a)
+            // sqrt = sqrt(r) * (cos(phi/2) + j sin(phi/2))
+            const gammaMag = Math.sqrt(gammaSq.magnitude());
+            const gammaPhase = gammaSq.phase() / 2;
 
-        const numReal = zLoad.real;
-        const numImag = zLoad.imag + z0 * tanTheta;
+            alpha = gammaMag * Math.cos(gammaPhase);
+            beta = gammaMag * Math.sin(gammaPhase);
 
-        const denReal = z0 - zLoad.imag * tanTheta;
-        const denImag = zLoad.real * tanTheta;
+            // Zc = sqrt(Z / Y)
+            const zcSq = Z_series.div(Y_shunt);
+            const zcMag = Math.sqrt(zcSq.magnitude());
+            const zcPhase = zcSq.phase() / 2;
+            Zc = new Complex(zcMag * Math.cos(zcPhase), zcMag * Math.sin(zcPhase));
 
-        const denMagSq = denReal * denReal + denImag * denImag;
+        } else {
+            // Standard Model
+            // alpha (Np/m) = Loss(dB/m) * ln(10)/20
+            alpha = (this.params.loss * Math.LN10) / 20;
+            // beta (rad/m) = w / v
+            beta = w / this.params.velocity;
 
-        if (denMagSq === 0) {
-            return { real: Infinity, imag: 0 };
+            // Zc is real Z0
+            Zc = new Complex(this.params.z0, 0);
         }
 
-        return {
-            real: z0 * (numReal * denReal + numImag * denImag) / denMagSq,
-            imag: z0 * (numImag * denReal - numReal * denImag) / denMagSq
-        };
+        // Apply length
+        const al = alpha * len;
+        const bl = beta * len;
+
+        // Calculate hyperbolic terms
+        const ch = TransmissionLine.complexCosh(al, bl);
+        const sh = TransmissionLine.complexSinh(al, bl);
+
+        const coshGammaL = new Complex(ch.real, ch.imag);
+        const sinhGammaL = new Complex(sh.real, sh.imag);
+
+        // A = cosh(gamma*l)
+        // B = Zc * sinh(gamma*l)
+        // C = (1/Zc) * sinh(gamma*l)
+        // D = A
+
+        const A = coshGammaL;
+        const B = Zc.mul(sinhGammaL);
+        const C = sinhGammaL.div(Zc);
+        const D = coshGammaL;
+
+        return { A, B, C, D };
     }
 
     /**
-     * For basic impedance query, return characteristic impedance
+     * For basic impedance query
+     * Returns Z0 (Standard) or approx sqrt(L/C) (RLGC)
      */
     getImpedance(frequency) {
-        return { real: this.params.z0, imag: 0 };
+        if (this.params.modelType === 'rlgc') {
+            // Return Zc at frequency
+            const w = 2 * Math.PI * frequency;
+            const Z = new Complex(this.params.r, w * this.params.l);
+            const Y = new Complex(this.params.g, w * this.params.c);
+            const Zc2 = Z.div(Y);
+            const mag = Math.sqrt(Zc2.magnitude());
+            const ang = Zc2.phase() / 2;
+            return new Complex(mag * Math.cos(ang), mag * Math.sin(ang));
+        }
+        return new Complex(this.params.z0, 0);
     }
 
     /**
@@ -127,7 +191,7 @@ class TransmissionLine extends Component {
     }
 
     /**
-     * Custom hitbox for TransmissionLine (약간 더 넓음)
+     * Custom hitbox for TransmissionLine
      */
     renderHitbox() {
         return `<rect class="hitbox" 
@@ -150,6 +214,15 @@ class TransmissionLine extends Component {
         tline.id = data.id;
         tline.rotation = data.rotation;
         tline.connections = data.connections;
+
+        // Restore extended params
+        if (data.params.loss !== undefined) tline.params.loss = data.params.loss;
+        if (data.params.modelType) tline.params.modelType = data.params.modelType;
+        if (data.params.r !== undefined) tline.params.r = data.params.r;
+        if (data.params.l !== undefined) tline.params.l = data.params.l;
+        if (data.params.g !== undefined) tline.params.g = data.params.g;
+        if (data.params.c !== undefined) tline.params.c = data.params.c;
+
         if (data.sliderRange) {
             tline.sliderRange = data.sliderRange;
         }

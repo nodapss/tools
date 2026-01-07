@@ -363,10 +363,22 @@ class DrawingManager {
         // Update Canvas Cursor
         const cursorClass = `drawing-mode-${tool}`;
         document.body.classList.remove('drawing-mode-pen', 'drawing-mode-circle', 'drawing-mode-rect', 'drawing-mode-arrow', 'drawing-mode-text');
+
+        // Toggle Paint Mode class on SVG
+        if (this.canvasManager && this.canvasManager.svg) {
+            if (this.isPaintMode) {
+                this.canvasManager.svg.classList.add('paint-mode');
+            } else {
+                this.canvasManager.svg.classList.remove('paint-mode');
+            }
+        }
+
         if (tool) {
             document.body.classList.add(cursorClass);
+            document.body.classList.add('drawing-tool-active');
             if (this.graphOverlay) this.graphOverlay.style.pointerEvents = 'auto'; // Enable events on overlay
         } else {
+            document.body.classList.remove('drawing-tool-active');
             if (this.graphOverlay) this.graphOverlay.style.pointerEvents = 'none'; // Passthrough when idle
         }
     }

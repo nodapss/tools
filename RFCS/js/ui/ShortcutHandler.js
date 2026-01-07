@@ -26,6 +26,10 @@ class ShortcutHandler {
             'place_transmission_line': { keys: ['t'], description: 'Place Transmission Line' },
             'place_port': { keys: ['p'], description: 'Place Port' },
 
+            // Clipboard
+            'copy': { keys: ['ctrl+c'], description: 'Copy Selected' },
+            'paste': { keys: ['ctrl+v'], description: 'Paste' },
+
             // Edit Operations
             'undo': { keys: ['ctrl+z'], description: 'Undo' },
             'redo': { keys: ['ctrl+y', 'ctrl+shift+z'], description: 'Redo' },
@@ -214,6 +218,17 @@ class ShortcutHandler {
         } else if (this.matches(e, 'reset_view')) {
             e.preventDefault();
             this.canvasManager.resetView(); // Assuming method exists
+        } else if (this.matches(e, 'copy')) {
+            e.preventDefault();
+            if (this.circuit.copySelected()) {
+                // Visual feedback? 
+                console.log('Copied to clipboard');
+            }
+        } else if (this.matches(e, 'paste')) {
+            e.preventDefault();
+            if (window.dragDropHandler) {
+                window.dragDropHandler.startPasteMode();
+            }
         }
 
         // Other keys are handled by specific managers logic (e.g., 'r' for resistor in dragging)

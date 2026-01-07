@@ -21,7 +21,268 @@ class Circuit {
 
         // Group Plots (Sub-circuit simulations)
         this.groupPlots = [];
+
+        // Clipboard
+        this.clipboard = null;
     }
+
+    /**
+     * Generate Gap-Filled ID
+     * Finds the lowest available number for a given prefix (e.g., 'R', 'Wire')
+     */
+    getGapFilledId(prefix) {
+        let maxNum = 0;
+        const existingNums = new Set();
+
+        // Check Components
+        this.components.forEach(comp => {
+            if (comp.id.startsWith(prefix + '_')) {
+                const num = parseInt(comp.id.split('_')[1], 10);
+                if (!isNaN(num)) existingNums.add(num);
+            }
+        });
+
+        // Check Wires
+        this.wires.forEach(wire => {
+            if (wire.id.startsWith(prefix + '_')) {
+                const num = parseInt(wire.id.split('_')[1], 10);
+                if (!isNaN(num)) existingNums.add(num);
+            }
+        });
+
+        // Find lowest missing number starting from 1
+        let candidate = 1;
+        while (existingNums.has(candidate)) {
+            candidate++;
+        }
+
+        return `${prefix}_${candidate}`;
+    }
+
+    /**
+     * Copy Selected Items (Multi-support)
+     */
+    copySelected() {
+        if (this.selectedItems.size === 0) return false;
+
+        const items = [];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let hasCountableItems = false; // To check if we have spatial items (comps/wires)
+
+        this.selectedItems.forEach(id => {
+            if (this.components.has(id)) {
+                const comp = this.components.get(id);
+                items.push({ type: 'component', data: comp.toJSON() });
+
+                // Bounding Box Calculation
+                minX = Math.min(minX, comp.x);
+                minY = Math.min(minY, comp.y);
+                maxX = Math.max(maxX, comp.x);
+                maxY = Math.max(maxY, comp.y);
+                hasCountableItems = true;
+            } else if (this.wires.has(id)) {
+                const wire = this.wires.get(id);
+                items.push({ type: 'wire', data: wire.toJSON() });
+
+                // Wire bounds
+                minX = Math.min(minX, Math.min(wire.startX, wire.endX));
+                minY = Math.min(minY, Math.min(wire.startY, wire.endY));
+                maxX = Math.max(maxX, Math.max(wire.startX, wire.endX));
+                maxY = Math.max(maxY, Math.max(wire.startY, wire.endY));
+                hasCountableItems = true;
+            }
+        });
+
+        if (items.length === 0) return false;
+
+        // Calculate Center
+        let centerX = 0, centerY = 0;
+        if (hasCountableItems) {
+            centerX = Math.round(((minX + maxX) / 2) / 20) * 20;
+            centerY = Math.round(((minY + maxY) / 2) / 20) * 20;
+        }
+
+        this.clipboard = {
+            center: { x: centerX, y: centerY },
+            items: items
+        };
+
+        console.log(`Copied ${items.length} items to clipboard. Center:`, this.clipboard.center);
+        return true;
+    }
+
+    /**
+     * Get Clipboard Data (for Ghost preview)
+     */
+    getClipboard() {
+        return this.clipboard;
+    }
+
+    /**
+     * Paste Clipboard at Position (Multi-support)
+     * @param {number} x - Target center X
+     * @param {number} y - Target center Y
+     */
+    pasteClipboard(x, y) {
+        if (!this.clipboard || !this.clipboard.items || this.clipboard.items.length === 0) return null;
+
+        const { center, items } = this.clipboard;
+        // Calculate offset (Target - Source Center), then snap the OFFSET itself
+        // This preserves the relative layout of all items
+        const rawDx = x - center.x;
+        const rawDy = y - center.y;
+        const dx = Math.round(rawDx / 20) * 20;
+        const dy = Math.round(rawDy / 20) * 20;
+
+        const idMap = new Map(); // Old ID -> New ID
+        const newComponents = [];
+        const newWires = [];
+
+        // Pass 1: Create Components & Generate IDs
+        items.forEach(item => {
+            if (item.type === 'component') {
+                const data = item.data;
+                const oldId = data.id;
+
+                const typePrefix = data.type || (oldId.includes('_') ? oldId.split('_')[0] : 'Comp');
+                const newId = this.getGapFilledId(typePrefix);
+
+                idMap.set(oldId, newId);
+
+                // Clone Data
+                const newData = JSON.parse(JSON.stringify(data));
+                newData.id = newId;
+
+                // Apply Offset (already snapped)
+                newData.x = newData.x + dx;
+                newData.y = newData.y + dy;
+
+                const CompClass = this.getComponentClass(newData.type);
+                if (CompClass) {
+                    const newComp = CompClass.fromJSON(newData);
+                    // Add via internal map to reserve ID for next iteration check
+                    this.components.set(newId, newComp);
+                    newComponents.push(newComp);
+                }
+            }
+        });
+
+        // Pass 2: Create Wires and Link Connections
+        items.forEach(item => {
+            if (item.type === 'wire') {
+                const data = item.data;
+                const oldId = data.id;
+
+                const newId = this.getGapFilledId('wire');
+
+                idMap.set(oldId, newId);
+
+                const newData = JSON.parse(JSON.stringify(data));
+                newData.id = newId;
+
+                // Apply Offset (already snapped)
+                newData.startX = newData.startX + dx;
+                newData.startY = newData.startY + dy;
+                newData.endX = newData.endX + dx;
+                newData.endY = newData.endY + dy;
+
+                // Update Connections
+                if (newData.startComponent && idMap.has(newData.startComponent)) {
+                    newData.startComponent = idMap.get(newData.startComponent);
+                } else {
+                    newData.startComponent = null;
+                    newData.startTerminal = null;
+                }
+
+                if (newData.endComponent && idMap.has(newData.endComponent)) {
+                    newData.endComponent = idMap.get(newData.endComponent);
+                } else {
+                    newData.endComponent = null;
+                    newData.endTerminal = null;
+                }
+
+                const newWire = window.Wire.fromJSON(newData);
+                this.wires.set(newId, newWire); // Reserve ID
+                newWires.push(newWire);
+            }
+        });
+
+        // Pass 3: Finalize (Add to History, Select, Notify)
+        newComponents.forEach(c => {
+            // Already in map, just save history
+            this.saveHistory('add', { component: c.toJSON() });
+        });
+        newWires.forEach(w => {
+            this.saveHistory('addWire', { wire: w.toJSON() });
+            this.autoConnectWire(w); // Ensure connections are registered in components
+        });
+
+        // Select new items
+        const newIds = [...newComponents.map(c => c.id), ...newWires.map(w => w.id)];
+        this.select(newIds);
+
+        this.notifyChange();
+        return newIds;
+    }
+
+
+
+    /*
+    const data = this.clipboard.data;
+    const CompClass = this.getComponentClass(data.type);
+    if (!CompClass) return null;
+
+    // Generate New ID
+    const typePrefix = data.type; // e.g. 'R', 'C'
+    const newId = this.getGapFilledId(typePrefix);
+
+    // Create new instance
+    // We use fromJSON but override ID and Position
+    const newData = JSON.parse(JSON.stringify(data));
+    newData.id = newId;
+    newData.x = x;
+    newData.y = y;
+
+    const newComp = CompClass.fromJSON(newData);
+    this.addComponent(newComp);
+    this.select(newId);
+    return newComp;
+}
+else if (this.clipboard.type === 'wire') {
+    const data = this.clipboard.data;
+
+    // Generate New ID
+    const newId = this.getGapFilledId('wire');
+
+    // Calculate offset logic if needed? 
+    // For wires, 'x,y' paste usually means centering the wire around mouse?
+    // Or just placing start point at mouse?
+    // Let's shift the wire so its center is at x,y
+    const centerX = (data.startX + data.endX) / 2;
+    const centerY = (data.startY + data.endY) / 2;
+    const dx = x - centerX;
+    const dy = y - centerY;
+
+    const newData = JSON.parse(JSON.stringify(data));
+    newData.id = newId;
+    newData.startX += dx;
+    newData.startY += dy;
+    newData.endX += dx;
+    newData.endY += dy;
+
+    // Reset connections - pasted wire is disconnected initially
+    newData.startComponent = null;
+    newData.startTerminal = null;
+    newData.endComponent = null;
+    newData.endTerminal = null;
+
+    const newWire = window.Wire.fromJSON(newData); // Global Wire class
+    this.addWire(newWire);
+
+    // Try auto-connect?
+    */
+
+
 
     /**
      * Add component to circuit

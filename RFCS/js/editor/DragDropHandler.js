@@ -47,6 +47,10 @@ class DragDropHandler {
 
         // Wire Selection Mode for Impedance Plot interaction
         this.wireSelectionMode = null; // { type: 'input'|'ground', callback: fn }
+
+        // Mouse tracking for immediate ghost update
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
     }
 
     /**
@@ -126,14 +130,19 @@ class DragDropHandler {
     }
 
     /**
-     * Remove ghost component
+     * Remove ghost component(s)
      */
     removeGhost() {
         if (this.ghostComponent) {
-            if (this.ghostComponent.element) {
-                this.ghostComponent.element.remove();
-            }
+            if (this.ghostComponent.element) this.ghostComponent.element.remove();
             this.ghostComponent = null;
+        }
+
+        if (this.ghosts) {
+            this.ghosts.forEach(g => {
+                if (g.element) g.element.remove();
+            });
+            this.ghosts = null;
         }
     }
 
@@ -141,9 +150,55 @@ class DragDropHandler {
      * Update ghost position
      */
     updateGhostPosition(x, y) {
+        if (this.ghosts) {
+            const snappedX = this.canvasManager.snapToGrid(x);
+            const snappedY = this.canvasManager.snapToGrid(y);
+            this.ghosts.forEach(g => {
+                const targetX = snappedX + g.offset.x;
+                const targetY = snappedY + g.offset.y;
+                const finalX = targetX;
+                const finalY = targetY;
+                if (g.obj instanceof window.Wire) {
+                    const w = g.obj._relativeStart;
+                    const e = g.obj._relativeEnd;
+                    g.obj.startX = finalX + w.dx;
+                    g.obj.startY = finalY + w.dy;
+                    g.obj.endX = finalX + e.dx;
+                    g.obj.endY = finalY + e.dy;
+                    g.obj.render();
+                } else {
+                    g.obj.moveTo(finalX, finalY);
+                }
+            });
+            return;
+        }
         if (this.ghostComponent) {
             const snappedX = this.canvasManager.snapToGrid(x);
             const snappedY = this.canvasManager.snapToGrid(y);
+
+            if (this.mode === 'PASTE' && this.circuit.clipboard.type === 'wire') {
+                // Wire Ghost: Move relative to center
+                // Wire class doesn't have moveTo? It has explicit coords.
+                // We created it centered at 0,0 locally maybe? 
+
+                // If it's a Wire instance
+                if (this.ghostComponent instanceof window.Wire) {
+                    const data = this.circuit.clipboard.data;
+                    const w = data.endX - data.startX;
+                    const h = data.endY - data.startY;
+
+                    // Center the wire at mouse
+                    this.ghostComponent.startX = snappedX - w / 2;
+                    this.ghostComponent.startY = snappedY - h / 2;
+                    this.ghostComponent.endX = snappedX + w / 2;
+                    this.ghostComponent.endY = snappedY + h / 2;
+
+                    this.ghostComponent.render();
+                    return;
+                }
+            }
+
+            // Component Ghost
             this.ghostComponent.moveTo(snappedX, snappedY);
         }
     }
@@ -221,6 +276,62 @@ class DragDropHandler {
         // Actually, simpler approach:
         // Always start 'new' drag.
         // If mouseup happens and we are still over palette/not on canvas, maybe just set mode?
+    }
+
+    /**
+     * Start Paste Mode
+     */
+    startPasteMode() {
+        if (this.circuit && this.circuit.clipboard && this.circuit.clipboard.items) {
+            const { center, items } = this.circuit.clipboard;
+            this.setMode('PASTE');
+            console.log('Starting Paste Mode (Multi):', items.length);
+            this.removeGhost();
+            this.ghosts = [];
+            items.forEach(item => {
+                const data = item.data;
+                let offset = { x: 0, y: 0 };
+                let ghostObj = null;
+                let element = null;
+                if (item.type === 'component') {
+                    const type = data.type;
+                    offset.x = data.x - center.x;
+                    offset.y = data.y - center.y;
+                    const component = this.instantiateComponent(type, -1000, -1000);
+                    if (component) {
+                        if (data.rotation !== undefined) component.rotation = data.rotation;
+                        if (data.label) component.label = data.label;
+                        ghostObj = component;
+                        element = component.render();
+                    }
+                } else if (item.type === 'wire') {
+                    const w = data.endX - data.startX;
+                    const h = data.endY - data.startY;
+                    const wireCenterX = (data.startX + data.endX) / 2;
+                    const wireCenterY = (data.startY + data.endY) / 2;
+                    offset.x = wireCenterX - center.x;
+                    offset.y = wireCenterY - center.y;
+                    const wire = new window.Wire(-w / 2, -h / 2, w / 2, h / 2);
+                    wire.isGhost = true;
+                    wire._relativeStart = { dx: data.startX - wireCenterX, dy: data.startY - wireCenterY };
+                    wire._relativeEnd = { dx: data.endX - wireCenterX, dy: data.endY - wireCenterY };
+                    ghostObj = wire;
+                    element = wire.render();
+                }
+                if (ghostObj && element) {
+                    element.classList.add('ghost-component');
+                    this.canvasManager.addOverlay(element);
+                    this.ghosts.push({ obj: ghostObj, offset, element });
+                }
+            });
+
+            // Immediately position ghost at last known mouse position
+            if (this.lastMouseX !== 0 || this.lastMouseY !== 0) {
+                this.updateGhostPosition(this.lastMouseX, this.lastMouseY);
+            }
+            return;
+        }
+
     }
 
     /**
@@ -407,8 +518,16 @@ class DragDropHandler {
                 }
 
                 // Standard Modes (Direct access)
-                if (window.shortcutHandler.matches(e, 'select_mode')) { this.setMode('select'); return; }
-                if (window.shortcutHandler.matches(e, 'wire_mode')) { this.setMode('wire'); return; }
+                if (window.shortcutHandler.matches(e, 'select_mode')) {
+                    if (window.drawingManager) window.drawingManager.exitPaintMode();
+                    this.setMode('select');
+                    return;
+                }
+                if (window.shortcutHandler.matches(e, 'wire_mode')) {
+                    if (window.drawingManager) window.drawingManager.exitPaintMode();
+                    this.setMode('wire');
+                    return;
+                }
                 if (window.shortcutHandler.matches(e, 'paint_mode')) { this.setMode('paint'); return; }
 
                 if (window.shortcutHandler.matches(e, 'cancel_action')) {
@@ -563,6 +682,30 @@ class DragDropHandler {
             return;
         }
 
+        // ** PASTE Mode Placement **
+        if (this.mode === 'PASTE') {
+            const snappedX = this.canvasManager.snapToGrid(point.x);
+            const snappedY = this.canvasManager.snapToGrid(point.y);
+
+            this.circuit.pasteClipboard(snappedX, snappedY);
+
+            // Stay in Paste mode? Or exit?
+            // User request: "Ctrl+V를 누르면 ghost상태로... 클릭했을 때 그 위치에... 놓아줘"
+            // Usually paste is one-off, but "Mode" implies it persists?
+            // "Ctrl+V" usually pastes ONCE.
+            // But if it follows mouse, it's like a placement mode.
+            // Let's stick to ONE paste per click for now, but keep mode if they want to paste multiple?
+            // Standard behavior: Ctrl+V -> Mouse -> Click -> Paste & Exit? 
+            // Or Paste & Continue?
+            // Let's EXIT after paste for standard behavior, unless user holds Shift?
+
+            // Actually, "Ctrl+V enters Ghost Mode" sounds like "Mode".
+            // Let's exit after one paste to be safe/simple.
+            this.setMode(null);
+            this.removeGhost();
+            return;
+        }
+
         // Identify what was clicked
         let clickedElement = e.target.closest('.circuit-component');
         const clickedWire = e.target.closest('.wire, .wire-hitbox');
@@ -611,6 +754,13 @@ class DragDropHandler {
                 window.drawingManager.clearSelection();
                 // Allow panning? Yes, standard fallback.
             }
+        }
+
+        // ** Paint Mode Protection **
+        // If we are in Paint Mode, do NOT allow selecting components/wires.
+        // We only allow Drawing Selection (handled above) or Drawing Actions (handled by DrawingManager).
+        if (window.drawingManager && window.drawingManager.isPaintMode) {
+            return;
         }
 
         // ** Auto-Select Logic (Deselect -> Select) **
@@ -960,9 +1110,11 @@ class DragDropHandler {
      */
     handleMouseMove(e) {
         const point = this.canvasManager.clientToSvg(e.clientX, e.clientY);
+        this.lastMouseX = point.x;
+        this.lastMouseY = point.y;
 
         // Update Ghost Position (Common for both 'new' drag and 'tool' mode)
-        if (this.ghostComponent) {
+        if (this.ghostComponent || this.ghosts) {
             this.updateGhostPosition(point.x, point.y);
         }
 
@@ -1287,6 +1439,9 @@ class DragDropHandler {
             }
 
             if (component) {
+                // Hide slider before opening modal
+                window.inlineSlider?.hide();
+
                 // Open component parameter modal
                 window.componentModal?.open(component);
             }
@@ -1655,8 +1810,6 @@ class DragDropHandler {
             window.drawingManager.setTool(null);
         }
 
-
-
         this.removeGhost(); // Clear any existing ghost
 
         if (this.isComponentMode(mode)) {
@@ -1678,6 +1831,8 @@ class DragDropHandler {
             // Highlight component in palette
             const compBtn = document.querySelector(`.component-item[data-type="${mode}"]`);
             if (compBtn) compBtn.classList.add('active');
+        } else if (mode === 'PASTE') {
+            // No specific button for Paste, maybe just visual indicator in status?
         } else if (mode) {
             const modeBtn = document.getElementById(`btn${mode.charAt(0).toUpperCase() + mode.slice(1)}`);
             if (modeBtn) modeBtn.classList.add('active');
@@ -1694,16 +1849,26 @@ class DragDropHandler {
             // Map type codes to full names
             const typeNames = {
                 'R': 'Place Resistor', 'L': 'Place Inductor', 'C': 'Place Capacitor',
-                'GND': 'Place Ground', 'TL': 'Place T-Line', 'PORT': 'Place Port'
+                'GND': 'Place Ground', 'TL': 'Place T-Line', 'PORT': 'Place Port',
+                'PASTE': 'Paste Item'
             };
             if (typeNames[mode]) displayText = typeNames[mode];
 
             modeDisplay.textContent = displayText;
         }
+
         // Update canvas cursor
-        this.svg.classList.remove('wire-mode');
+        this.svg.classList.remove('wire-mode', 'paste-mode');
+        this.svg.style.cursor = 'default';
+
         if (mode === 'wire') {
             this.svg.classList.add('wire-mode');
+            this.svg.style.cursor = 'crosshair';
+        } else if (this.isComponentMode(mode) || mode === 'PASTE') {
+            this.svg.style.cursor = 'crosshair';
+            if (mode === 'PASTE') this.svg.classList.add('paste-mode');
+        } else if (mode === 'delete') {
+            this.svg.style.cursor = 'not-allowed';
         }
 
         // Notify wire manager of mode change

@@ -25,7 +25,14 @@ class ComponentModal {
             // Velocity (m/s)
             'm/s': 1,
             // Port number (dimensionless)
-            '': 1
+            '': 1,
+
+            // Per-meter units (Transmission Line)
+            'mΩ/m': 1e-3, 'Ω/m': 1, 'kΩ/m': 1e3,
+            'pH/m': 1e-12, 'nH/m': 1e-9, 'μH/m': 1e-6,
+            'fF/m': 1e-15, 'pF/m': 1e-12, 'nF/m': 1e-9, 'μF/m': 1e-6,
+            'nS/m': 1e-9, 'μS/m': 1e-6, 'mS/m': 1e-3, 'S/m': 1,
+            'dB/m': 1
         };
 
         // Parameter configurations per component type
@@ -75,13 +82,85 @@ class ComponentModal {
             ],
             'TL': [
                 {
+                    name: 'modelType',
+                    label: 'Model Type',
+                    type: 'select',
+                    options: [
+                        { value: 'standard', label: 'Standard (Z₀, v, Loss)' },
+                        { value: 'rlgc', label: 'Physical (RLGC)' }
+                    ],
+                    units: [''],
+                    defaultUnit: '',
+                    defaultMin: { value: 0, unit: '' },
+                    defaultMax: { value: 0, unit: '' }
+                },
+                // Standard Model Params
+                {
                     name: 'z0',
                     label: 'Characteristic Impedance (Z₀)',
                     units: ['Ω', 'kΩ'],
                     defaultUnit: 'Ω',
                     defaultMin: { value: 10, unit: 'Ω' },
-                    defaultMax: { value: 200, unit: 'Ω' }
+                    defaultMax: { value: 200, unit: 'Ω' },
+                    condition: (params) => !params.modelType || params.modelType === 'standard'
                 },
+                {
+                    name: 'velocity',
+                    label: 'Velocity Factor',
+                    units: [''], // Will handle scale internally or display float
+                    defaultUnit: '',
+                    defaultMin: { value: 0.1, unit: '' },
+                    defaultMax: { value: 1.0, unit: '' },
+                    scale: 3e8, // Special handling for velocity if needed, but keeping simple for now
+                    condition: (params) => !params.modelType || params.modelType === 'standard'
+                },
+                {
+                    name: 'loss',
+                    label: 'Loss (dB/m)',
+                    units: ['dB/m'],
+                    defaultUnit: 'dB/m',
+                    defaultMin: { value: 0, unit: 'dB/m' },
+                    defaultMax: { value: 10, unit: 'dB/m' },
+                    condition: (params) => !params.modelType || params.modelType === 'standard'
+                },
+                // RLGC Params
+                {
+                    name: 'r',
+                    label: 'Resistance (R)',
+                    units: ['mΩ/m', 'Ω/m', 'kΩ/m'],
+                    defaultUnit: 'Ω/m',
+                    defaultMin: { value: 0, unit: 'Ω/m' },
+                    defaultMax: { value: 100, unit: 'Ω/m' },
+                    condition: (params) => params.modelType === 'rlgc'
+                },
+                {
+                    name: 'l',
+                    label: 'Inductance (L)',
+                    units: ['pH/m', 'nH/m', 'μH/m'],
+                    defaultUnit: 'nH/m',
+                    defaultMin: { value: 10, unit: 'nH/m' },
+                    defaultMax: { value: 1000, unit: 'nH/m' },
+                    condition: (params) => params.modelType === 'rlgc'
+                },
+                {
+                    name: 'g',
+                    label: 'Conductance (G)',
+                    units: ['nS/m', 'μS/m', 'mS/m', 'S/m'],
+                    defaultUnit: 'S/m',
+                    defaultMin: { value: 0, unit: 'S/m' },
+                    defaultMax: { value: 1, unit: 'S/m' },
+                    condition: (params) => params.modelType === 'rlgc'
+                },
+                {
+                    name: 'c',
+                    label: 'Capacitance (C)',
+                    units: ['fF/m', 'pF/m', 'nF/m', 'μF/m'],
+                    defaultUnit: 'pF/m',
+                    defaultMin: { value: 1, unit: 'pF/m' },
+                    defaultMax: { value: 200, unit: 'pF/m' },
+                    condition: (params) => params.modelType === 'rlgc'
+                },
+                // Common Params
                 {
                     name: 'length',
                     label: 'Length',
@@ -214,33 +293,89 @@ class ComponentModal {
 
         const paramsHtml = config.map((paramConfig, index) => {
             const currentValue = component.params[paramConfig.name];
-            const { displayValue, displayUnit } = this.convertToDisplay(currentValue, paramConfig);
+
+            // Handle Select Type
+            if (paramConfig.type === 'select') {
+                this.paramStates[paramConfig.name] = {
+                    value: currentValue || paramConfig.options[0]?.value,
+                    config: paramConfig
+                };
+
+                // Check visibility
+                const isVisible = paramConfig.condition ? paramConfig.condition(component.params) : true;
+                const displayStyle = isVisible ? 'block' : 'none';
+
+                return this.createSelectSection(paramConfig, currentValue, displayStyle);
+            }
+
+            // Validating numeric params
+            let displayVal, displayUnit;
+            if (paramConfig.name === 'velocity' && component.type === 'TL') {
+                // Velocity special case: store as m/s (3e8), display as ratio (1.0)
+                // Actually component param stores 3e8.
+                // We want to show 1.0 c. 
+                // Let's rely on unit multipliers? 'c': 3e8? 
+                // For now, let's treat it as a float: 0.66
+                // component.params.velocity is e.g. 2e8
+
+                // Simple hack for velocity: treat unit as empty, value as ratio to c
+                displayVal = (currentValue / 3e8).toFixed(4);
+                displayUnit = '';
+            } else {
+                const res = this.convertToDisplay(currentValue, paramConfig);
+                displayVal = res.displayValue;
+                displayUnit = res.displayUnit;
+            }
 
             // Check for persisted range config
             const persisted = component.sliderRange?.[paramConfig.name];
 
             // Initialize param state
             this.paramStates[paramConfig.name] = {
-                value: displayValue,
+                value: displayVal,
                 unit: displayUnit,
                 minValue: persisted ? persisted.min : paramConfig.defaultMin.value,
                 minUnit: persisted ? persisted.minUnit : paramConfig.defaultMin.unit,
                 maxValue: persisted ? persisted.max : paramConfig.defaultMax.value,
                 maxUnit: persisted ? persisted.maxUnit : paramConfig.defaultMax.unit,
-                isManual: persisted ? persisted.isManual : false, // Load manual state
+                isManual: persisted ? persisted.isManual : false,
                 config: paramConfig
             };
 
-            return this.createParamSection(paramConfig, displayValue, displayUnit, index);
+            // Check visibility
+            const isVisible = paramConfig.condition ? paramConfig.condition(component.params) : true;
+            const displayStyle = isVisible ? 'block' : 'none';
+
+            return this.createParamSection(paramConfig, displayVal, displayUnit, index, displayStyle);
         }).join('');
 
         return idSection + paramsHtml;
     }
 
     /**
+     * Create HTML for Select parameter
+     */
+    createSelectSection(config, value, displayStyle) {
+        const optionsHtml = config.options.map(opt =>
+            `<option value="${opt.value}" ${opt.value === value ? 'selected' : ''}>${opt.label}</option>`
+        ).join('');
+
+        return `
+            <div class="param-section" data-param="${config.name}" style="display: ${displayStyle}">
+                <label class="param-label">${config.label}</label>
+                <div class="value-row">
+                    <select class="value-input" id="select_${config.name}" style="width: 100%">
+                        ${optionsHtml}
+                    </select>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Create HTML for a parameter section
      */
-    createParamSection(config, value, unit, index) {
+    createParamSection(config, value, unit, index, displayStyle = 'block') {
         const unitOptions = config.units.map(u =>
             `<option value="${u}" ${u === unit ? 'selected' : ''}>${u || '-'}</option>`
         ).join('');
@@ -259,7 +394,7 @@ class ComponentModal {
         const step = config.isInteger ? '1' : 'any';
 
         return `
-            <div class="param-section" data-param="${config.name}">
+            <div class="param-section" data-param="${config.name}" style="display: ${displayStyle}">
                 <label class="param-label">${config.label}</label>
                 
                 <!-- Value Input -->
@@ -332,6 +467,20 @@ class ComponentModal {
     initDynamicEvents() {
         Object.keys(this.paramStates).forEach(paramName => {
             const state = this.paramStates[paramName];
+
+            // Handle Select Type Events
+            if (state.config.type === 'select') {
+                const selectElement = document.getElementById(`select_${paramName}`);
+                if (selectElement) {
+                    selectElement.addEventListener('change', () => {
+                        state.value = selectElement.value;
+                        this.applyParamImmediately(paramName);
+                        // Trigger visibility check
+                        this.updateVisibility();
+                    });
+                }
+                return; // Skip numeric initialization
+            }
 
             // Value input change
             const valueInput = document.getElementById(`value_${paramName}`);
@@ -444,6 +593,27 @@ class ComponentModal {
                 this.updateValueFromSlider(paramName);
                 this.applyParamImmediately(paramName);
             }, { passive: false });
+        });
+    }
+
+    /**
+     * Update visibility of parameters based on current state (and conditions)
+     */
+    updateVisibility() {
+        if (!this.currentComponent) return;
+
+        // Re-evaluate params (as they might have changed via applyParamImmediately)
+        const params = this.currentComponent.params;
+
+        Object.keys(this.paramStates).forEach(paramName => {
+            const state = this.paramStates[paramName];
+            if (state.config.condition) {
+                const isVisible = state.config.condition(params);
+                const section = this.modalBody.querySelector(`.param-section[data-param="${paramName}"]`);
+                if (section) {
+                    section.style.display = isVisible ? 'block' : 'none';
+                }
+            }
         });
     }
 
@@ -601,8 +771,18 @@ class ComponentModal {
         const state = this.paramStates[paramName];
         if (!state) return;
 
-        // Convert to base unit
-        const baseValue = state.value * (this.UNIT_MULTIPLIERS[state.unit] || 1);
+        let baseValue;
+
+        if (state.config.type === 'select') {
+            baseValue = state.value;
+        } else if (paramName === 'velocity' && this.currentComponent.type === 'TL') {
+            // Special handling for velocity if we treated it as ratio
+            // state.value is 0.66, we need to save 0.66 * 3e8
+            baseValue = state.value * 3e8;
+        } else {
+            // Standard numeric conversion
+            baseValue = state.value * (this.UNIT_MULTIPLIERS[state.unit] || 1);
+        }
 
         // Update component parameter
         this.currentComponent.params[paramName] = baseValue;
@@ -611,7 +791,6 @@ class ComponentModal {
         this.reRenderComponent();
 
         // Notify circuit change (triggers Run Mode auto-simulation)
-        window.circuit?.notifyChange();
         window.circuit?.notifyChange();
     }
 

@@ -205,15 +205,100 @@ class PropertyPanel {
     /**
      * Render transmission line parameters
      */
+    /**
+     * Render transmission line parameters
+     */
     renderTransmissionLineParams(component) {
+        // Init default if missing (for old saves)
+        if (!component.params.modelType) component.params.modelType = 'standard';
+
+        const isStandard = component.params.modelType === 'standard';
+        const displayStandard = isStandard ? 'block' : 'none';
+        const displayRLGC = isStandard ? 'none' : 'block';
+
         return `
             <div class="property-row">
-                <span class="property-label">Z₀:</span>
-                <div class="property-input value-with-unit">
-                    <input type="number" id="paramZ0" value="${component.params.z0}" step="any" min="0">
-                    <span style="color: var(--text-muted)">Ω</span>
+                <span class="property-label">Model:</span>
+                <div class="property-input">
+                    <select id="paramModelType">
+                        <option value="standard" ${isStandard ? 'selected' : ''}>Standard (Z₀, v, Loss)</option>
+                        <option value="rlgc" ${!isStandard ? 'selected' : ''}>Physical (RLGC)</option>
+                    </select>
                 </div>
             </div>
+
+            <!-- Standard Parameters -->
+            <div id="groupStandard" style="display: ${displayStandard}">
+                <div class="property-row">
+                    <span class="property-label">Z₀:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramZ0" value="${component.params.z0}" step="any" min="0">
+                        <span style="color: var(--text-muted)">Ω</span>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <span class="property-label">Velocity:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramVelocity" 
+                               value="${(component.params.velocity / 3e8).toFixed(4)}" 
+                               step="0.0001" min="0" max="1">
+                        <span style="color: var(--text-muted)">× c</span>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <span class="property-label">Loss:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramLoss" value="${component.params.loss || 0}" step="0.1" min="0">
+                        <span style="color: var(--text-muted)">dB/m</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RLGC Parameters -->
+            <div id="groupRLGC" style="display: ${displayRLGC}">
+                <div class="property-row">
+                    <span class="property-label">R:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramR" 
+                               value="${this.extractValue(component.params.r || 0)}" step="any" min="0">
+                        <select id="paramRUnit">
+                            ${this.renderUnitOptions('Ω/m', component.params.r || 0)}
+                        </select>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <span class="property-label">L:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramL" 
+                               value="${this.extractValue(component.params.l || 250e-9)}" step="any" min="0">
+                        <select id="paramLUnit">
+                            ${this.renderUnitOptions('H/m', component.params.l || 250e-9)}
+                        </select>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <span class="property-label">G:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramG" 
+                               value="${this.extractValue(component.params.g || 0)}" step="any" min="0">
+                        <select id="paramGUnit">
+                            ${this.renderUnitOptions('S/m', component.params.g || 0)}
+                        </select>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <span class="property-label">C:</span>
+                    <div class="property-input value-with-unit">
+                        <input type="number" id="paramC" 
+                               value="${this.extractValue(component.params.c || 100e-12)}" step="any" min="0">
+                        <select id="paramCUnit">
+                            ${this.renderUnitOptions('F/m', component.params.c || 100e-12)}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Common Parameters -->
             <div class="property-row">
                 <span class="property-label">Length:</span>
                 <div class="property-input value-with-unit">
@@ -223,15 +308,6 @@ class PropertyPanel {
                     <select id="paramLengthUnit">
                         ${this.renderLengthUnitOptions(component.params.length)}
                     </select>
-                </div>
-            </div>
-            <div class="property-row">
-                <span class="property-label">Velocity:</span>
-                <div class="property-input value-with-unit">
-                    <input type="number" id="paramVelocity" 
-                           value="${(component.params.velocity / 3e8).toFixed(4)}" 
-                           step="0.0001" min="0" max="1">
-                    <span style="color: var(--text-muted)">× c</span>
                 </div>
             </div>
         `;
@@ -448,21 +524,60 @@ class PropertyPanel {
                     (val) => { component.params.capacitance = val; });
                 break;
             case 'TL':
+                // Model Type Switcher
+                const modelTypeInput = document.getElementById('paramModelType');
+                const groupStandard = document.getElementById('groupStandard');
+                const groupRLGC = document.getElementById('groupRLGC');
+
+                if (modelTypeInput) {
+                    modelTypeInput.addEventListener('change', () => {
+                        component.params.modelType = modelTypeInput.value;
+                        if (component.params.modelType === 'standard') {
+                            groupStandard.style.display = 'block';
+                            groupRLGC.style.display = 'none';
+                        } else {
+                            groupStandard.style.display = 'none';
+                            groupRLGC.style.display = 'block';
+                        }
+                        component.render();
+                        if (this.circuit && this.circuit.notifyChange) this.circuit.notifyChange();
+                    });
+                }
+
+                // Standard Params
                 const z0Input = document.getElementById('paramZ0');
                 if (z0Input) {
                     z0Input.addEventListener('change', () => {
                         component.params.z0 = parseFloat(z0Input.value);
                         component.render();
+                        if (this.circuit && this.circuit.notifyChange) this.circuit.notifyChange();
                     });
                 }
-                this.bindValueWithUnit('paramLength', 'paramLengthUnit',
-                    (val) => { component.params.length = val; });
                 const velInput = document.getElementById('paramVelocity');
                 if (velInput) {
                     velInput.addEventListener('change', () => {
                         component.params.velocity = parseFloat(velInput.value) * 3e8;
+                        if (this.circuit && this.circuit.notifyChange) this.circuit.notifyChange();
                     });
                 }
+                const lossInput = document.getElementById('paramLoss');
+                if (lossInput) {
+                    lossInput.addEventListener('change', () => {
+                        component.params.loss = parseFloat(lossInput.value);
+                        component.render(); // Update text
+                        if (this.circuit && this.circuit.notifyChange) this.circuit.notifyChange();
+                    });
+                }
+
+                // RLGC Params
+                this.bindValueWithUnit('paramR', 'paramRUnit', (val) => { component.params.r = val; });
+                this.bindValueWithUnit('paramL', 'paramLUnit', (val) => { component.params.l = val; });
+                this.bindValueWithUnit('paramG', 'paramGUnit', (val) => { component.params.g = val; });
+                this.bindValueWithUnit('paramC', 'paramCUnit', (val) => { component.params.c = val; });
+
+                // Common
+                this.bindValueWithUnit('paramLength', 'paramLengthUnit',
+                    (val) => { component.params.length = val; });
                 break;
             case 'PORT':
                 const portNumInput = document.getElementById('paramPortNumber');
