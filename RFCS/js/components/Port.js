@@ -41,7 +41,7 @@ class Port extends Component {
      */
     renderTerminals() {
         const offset = this.terminals.start;
-        const connected = this.connections.start !== null;
+        const connected = this.connections.start !== null || (this.directConnections && this.directConnections.start);
         return `<circle class="terminal ${connected ? 'connected' : ''}" 
                        data-terminal="start"
                        cx="${offset.x}" cy="${offset.y}" r="4"/>`;

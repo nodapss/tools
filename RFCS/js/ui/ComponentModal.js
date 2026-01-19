@@ -15,7 +15,7 @@ class ComponentModal {
         // Unit multipliers
         this.UNIT_MULTIPLIERS = {
             // Resistance/Impedance (Ω)
-            'mΩ': 1e-3, 'Ω': 1, 'kΩ': 1e3, 'MΩ': 1e6,
+            'mΩ': 1e-3, 'Ω': 1, 'kΩ': 1e3, 'MΩ': 1e6, 'GΩ': 1e9,
             // Inductance (H)
             'pH': 1e-12, 'nH': 1e-9, 'μH': 1e-6, 'mH': 1e-3, 'H': 1,
             // Capacitance (F)
@@ -74,10 +74,10 @@ class ComponentModal {
                 {
                     name: 'impedance',
                     label: 'Impedance',
-                    units: ['Ω', 'kΩ'],
+                    units: ['Ω', 'kΩ', 'MΩ', 'GΩ'],
                     defaultUnit: 'Ω',
                     defaultMin: { value: 1, unit: 'Ω' },
-                    defaultMax: { value: 1, unit: 'kΩ' }
+                    defaultMax: { value: 10, unit: 'GΩ' }
                 }
             ],
             'TL': [
@@ -102,6 +102,16 @@ class ComponentModal {
                     defaultUnit: 'Ω',
                     defaultMin: { value: 10, unit: 'Ω' },
                     defaultMax: { value: 200, unit: 'Ω' },
+                    condition: (params) => !params.modelType || params.modelType === 'standard'
+                },
+                {
+                    name: 'z0_imag',
+                    label: 'Reactance (Im(Z₀))',
+                    units: ['Ω', 'kΩ'],
+                    defaultUnit: 'Ω',
+                    defaultMin: { value: -50, unit: 'Ω' },
+                    defaultMax: { value: 50, unit: 'Ω' },
+                    disableAutoRange: false,
                     condition: (params) => !params.modelType || params.modelType === 'standard'
                 },
                 {
@@ -528,39 +538,40 @@ class ComponentModal {
                 state.minValue = parseFloat(minInput.value) || 0;
                 this.updateSliderRange(paramName);
                 this.updateSliderFromValue(paramName);
-                this.saveRangeToComponent(paramName);
-                window.circuit?.notifyChange(); // Update Run Mode
+                // Deferred save: saveRangeToComponent removed
+                // Deferred notify: circuit.notifyChange removed
             });
 
             maxInput?.addEventListener('input', () => {
                 state.maxValue = parseFloat(maxInput.value) || 0;
                 this.updateSliderRange(paramName);
                 this.updateSliderFromValue(paramName);
-                this.saveRangeToComponent(paramName);
-                window.circuit?.notifyChange(); // Update Run Mode
+                // Deferred save: saveRangeToComponent removed
+                // Deferred notify: circuit.notifyChange removed
             });
 
             minUnitSelect?.addEventListener('change', () => {
                 state.minUnit = minUnitSelect.value;
                 this.updateSliderRange(paramName);
                 this.updateSliderFromValue(paramName);
-                this.saveRangeToComponent(paramName);
-                window.circuit?.notifyChange(); // Update Run Mode
+                // Deferred save
+                // Deferred notify
             });
 
             maxUnitSelect?.addEventListener('change', () => {
                 state.maxUnit = maxUnitSelect.value;
                 this.updateSliderRange(paramName);
                 this.updateSliderFromValue(paramName);
-                this.saveRangeToComponent(paramName);
-                window.circuit?.notifyChange(); // Update Run Mode
+                // Deferred save
+                // Deferred notify
             });
 
             // Manual Checkbox
             const manualCheckbox = document.getElementById(`manual_${paramName}`);
             manualCheckbox?.addEventListener('change', () => {
                 state.isManual = manualCheckbox.checked;
-                this.saveRangeToComponent(paramName);
+                // Defer saving manual state until Apply
+                // this.saveRangeToComponent(paramName);
 
                 // If unchecked, immediately auto-update
                 if (!state.isManual) {
@@ -807,11 +818,13 @@ class ComponentModal {
 
         this.currentComponent.sliderRange[paramName] = {
             min: state.minValue,
-            max: state.maxValue,
+            max: state.maxValue, // Fixed: was state.max
             minUnit: state.minUnit,
             maxUnit: state.maxUnit,
             isManual: state.isManual
         };
+
+        // Event dispatching moved to applyChanges
     }
 
     /**
@@ -880,6 +893,26 @@ class ComponentModal {
             }
         }
 
+        // Apply all range changes from temporary state
+        if (this.currentComponent && this.paramStates) {
+            let hasRangeUpdates = false;
+            Object.keys(this.paramStates).forEach(paramName => {
+                // We should save range for every parameter that has state
+                // This updates currentComponent.sliderRange
+                this.saveRangeToComponent(paramName);
+                hasRangeUpdates = true;
+            });
+
+            if (hasRangeUpdates) {
+                // Dispatch event ONCE after all updates
+                console.log('[ComponentModal] Apply clicked. Dispatching component-range-changed event');
+                window.dispatchEvent(new CustomEvent('component-range-changed'));
+
+                // Notify circuit to ensure any simulation dependencies update
+                window.circuit?.notifyChange();
+            }
+        }
+
         // 원래 값 데이터 클리어 (복원 방지)
         this.originalParams = null;
 
@@ -915,7 +948,7 @@ class ComponentModal {
 
         // Update slider constraints
         this.updateSliderRange(paramName);
-        this.saveRangeToComponent(paramName);
+        // Deferred save: saveRangeToComponent removed
     }
 
     /**

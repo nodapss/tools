@@ -222,7 +222,46 @@ class SimulationController {
         console.log(`[Debug] plotGroupImp for ${groupConfig.name} (${groupConfig.id})`);
 
         try {
-            const results = await this.calculator.simulateSubCircuit(groupConfig);
+            let results = null;
+
+            // 1. Integrated Component Special Handling
+            if (groupConfig.integratedComponentId && window.circuit) {
+                const comp = window.circuit.getComponent(groupConfig.integratedComponentId);
+                if (comp && typeof comp.getImpedance === 'function') {
+                    console.log(`[Debug] Simulating Integrated Component Internals: ${comp.id}`);
+
+                    // Generate frequencies consistent with main calculator
+                    let frequencies = [];
+                    if (this.calculator && typeof this.calculator.generateFrequencies === 'function') {
+                        frequencies = this.calculator.generateFrequencies();
+                    } else {
+                        // Fallback defaults
+                        frequencies = [];
+                        for (let i = 0; i < 201; i++) frequencies.push(1e6 + i * (99e6 / 200));
+                    }
+
+                    const zinData = [];
+                    frequencies.forEach(f => {
+                        const z = comp.getImpedance(f);
+                        // Ensure we push a valid Complex-like object or null
+                        if (z) {
+                            zinData.push(z);
+                        } else {
+                            zinData.push({ real: 0, imag: 0 }); // Fallback for error
+                        }
+                    });
+
+                    results = {
+                        frequencies: frequencies,
+                        zin: zinData
+                    };
+                }
+            }
+
+            // 2. Default Sub-circuit Simulation (if not handled above)
+            if (!results) {
+                results = await this.calculator.simulateSubCircuit(groupConfig);
+            }
 
             if (results && this.sParamGraph) {
                 // Overlay on graph

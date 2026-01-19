@@ -8,6 +8,7 @@ class ImpedanceConfigModal {
         this.component = null;
         this.onPlot = null;
         this.existingGroupId = null; // Track if we are editing an existing group
+        this.contextComponent = null; // Reference to IntegratedComponent if applicable
         this.init();
     }
 
@@ -111,6 +112,7 @@ class ImpedanceConfigModal {
         this.modal.style.display = 'none';
 
         if (window.dragDropHandler) {
+            // Pass this.contextComponent which is the IntegratedComponent (Block) if we are in Group mode
             window.dragDropHandler.selectWireForImpedance(type, (id, terminal) => {
                 // Callback when item is selected
                 this.modal.style.display = 'block'; // Show modal again
@@ -135,12 +137,13 @@ class ImpedanceConfigModal {
                 labelEl.dataset.value = value;
                 labelEl.style.color = 'var(--text-color)'; // Active color
                 labelEl.style.fontStyle = 'normal';
-            });
+            }, this.contextComponent); // Pass context scope
         }
     }
 
-    open(target, onPlotCallback, secondaryTarget = []) {
+    open(target, onPlotCallback, secondaryTarget = [], defaultConfig = null, contextComponent = null) {
         this.onPlot = onPlotCallback;
+        this.contextComponent = contextComponent;
 
         let components = [];
         let wires = [];
@@ -168,7 +171,11 @@ class ImpedanceConfigModal {
         if (err) err.style.display = 'none';
 
         // Set Title & Mode
-        title.textContent = isGroup ? "Group Plot Settings" : "Plot Impedance Settings";
+        if (isGroup) {
+            title.textContent = "Test Port Configuration";
+        } else {
+            title.textContent = "Component Simulation Settings";
+        }
         uiSingle.style.display = isGroup ? 'none' : 'block';
         uiGroup.style.display = isGroup ? 'block' : 'none';
 
@@ -217,6 +224,19 @@ class ImpedanceConfigModal {
 
                 setLabel(inputLabel, inputVal, existingGroup.inputLocation);
                 setLabel(groundLabel, groundVal, existingGroup.outputLocation);
+            } else if (this.contextComponent && defaultConfig) {
+                // --- CASE: Integrated Component Context ---
+                // Pre-fill from internalPortConfig if no global group exists
+                if (defaultConfig.inputTerminal) {
+                    const [id, term] = defaultConfig.inputTerminal.split(':');
+                    const loc = { componentId: id, terminal: term };
+                    setLabel(inputLabel, defaultConfig.inputTerminal, loc);
+                }
+                if (defaultConfig.groundTerminal) {
+                    const [id, term] = defaultConfig.groundTerminal.split(':');
+                    const loc = { componentId: id, terminal: term };
+                    setLabel(groundLabel, defaultConfig.groundTerminal, loc);
+                }
             }
 
         } else {
@@ -266,6 +286,7 @@ class ImpedanceConfigModal {
         this.modal.style.display = 'none';
         this.component = null;
         this.targetGroup = null;
+        this.contextComponent = null;
         this.onPlot = null;
         const err = document.getElementById('impError');
         if (err) err.style.display = 'none';
@@ -338,10 +359,23 @@ class ImpedanceConfigModal {
                 inputLocation: { componentId: inputParts[0], terminal: inputParts[1] },
                 outputLocation: { componentId: groundParts[0], terminal: groundParts[1] },
                 enabled: enabled,
-                color: groupColor
+                color: groupColor,
+                integratedComponentId: this.contextComponent ? this.contextComponent.id : null
             };
 
             window.circuit.addGroupPlot(groupConfig);
+
+            // --- SYNC: If this group belongs to an IntegratedComponent, update it ---
+            if (this.contextComponent) {
+                this.contextComponent.internalPortConfig = {
+                    inputTerminal: inputParts.join(':'),
+                    groundTerminal: groundParts.join(':')
+                };
+                // Force rebuild of Virtual Circuit so View VC sees the new ports immediately
+                if (typeof this.contextComponent.invalidateCache === 'function') {
+                    this.contextComponent.invalidateCache();
+                }
+            }
 
         } else if (this.component) {
             // CASE: Single Component

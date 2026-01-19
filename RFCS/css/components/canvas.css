@@ -44,24 +44,38 @@
 }
 
 /* Wire Selection Mode - Hover Highlight (Green) */
-/* 1. Directly hovering the visible wire */
-.circuit-canvas.selecting-wire .wire:hover,
-/* 2. Hovering the invisible hitbox triggers the visible wire highlight */
-.circuit-canvas.selecting-wire .wire-hitbox:hover+.wire {
+/* 
+   Logic:
+   1. If .selecting-wire is ON AND .scoped-selection is OFF -> Highlight ANY wire/component
+   2. If .selecting-wire is ON AND .scoped-selection is ON -> Highlight ONLY .selectable-target
+*/
+
+/* --- CASE 1: Global Selection (No Scope) --- */
+.circuit-canvas.selecting-wire:not(.scoped-selection) .wire:hover,
+.circuit-canvas.selecting-wire:not(.scoped-selection) .wire-hitbox:hover+.wire {
     stroke: #00FF00 !important;
     stroke-width: 4px;
     filter: drop-shadow(0 0 4px #00FF00);
 }
 
-/* Ensure hitbox shows pointer cursor too */
-.circuit-canvas.selecting-wire .wire-hitbox {
-    cursor: pointer !important;
-    pointer-events: stroke !important;
+.circuit-canvas.selecting-wire:not(.scoped-selection) .circuit-component:hover .component-body,
+.circuit-canvas.selecting-wire:not(.scoped-selection) .circuit-component:hover .terminal {
+    stroke: #00FF00 !important;
+    color: #00FF00 !important;
+    filter: drop-shadow(0 0 4px #00FF00);
 }
 
-/* Components: Target visible parts ONLY when group is hovered */
-.circuit-canvas.selecting-wire .circuit-component:hover .component-body,
-.circuit-canvas.selecting-wire .circuit-component:hover .terminal {
+
+/* --- CASE 2: Scoped Selection (With .selectable-target) --- */
+.circuit-canvas.selecting-wire.scoped-selection .wire.selectable-target:hover,
+.circuit-canvas.selecting-wire.scoped-selection .wire-hitbox.selectable-target:hover+.wire {
+    stroke: #00FF00 !important;
+    stroke-width: 4px;
+    filter: drop-shadow(0 0 4px #00FF00);
+}
+
+.circuit-canvas.selecting-wire.scoped-selection .circuit-component.selectable-target:hover .component-body,
+.circuit-canvas.selecting-wire.scoped-selection .circuit-component.selectable-target:hover .terminal {
     stroke: #00FF00 !important;
     color: #00FF00 !important;
     filter: drop-shadow(0 0 4px #00FF00);
@@ -198,6 +212,13 @@
     fill: none;
     cursor: pointer;
     pointer-events: stroke;
+}
+
+.wire.highlight {
+    stroke: var(--selection-color);
+    stroke-width: 4px;
+    filter: drop-shadow(0 0 4px var(--selection-color));
+    opacity: 0.8;
 }
 
 .wire-preview {

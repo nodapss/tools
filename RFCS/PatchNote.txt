@@ -1,0 +1,195 @@
+﻿\date:2025.12.04 \version:v1.0.07
+\Changelog:그래프 파일 여러개 선택해서 그려지기 \requester:JSB \updater:MSB
+\Changelog:와이어 cw W 대문자로 해야될때 있음 수정 \requester:JSB \updater:MSB
+\Changelog:Wire-Wire, Component-Component 직접 연결 지원 \requester:JSB \updater:MSB
+\Changelog:회로 로드 시 주파수, 포인트, 그래프 설정 복원 \requester:JSB \updater:MSB
+\Changelog:슬라이드바 휠 조절 기능 추가 \requester:JSB \updater:MSB
+\Changelog:Chart Legend Show/Hide 기능 추가 \requester:JSB \updater:MSB
+\Changelog:X축 Log/Linear Scale 지원 \requester:JSB \updater:MSB
+\Changelog:리팩토링 진행 \requester:JSB \updater:MSB
+\Changelog:그래프 플로팅 로직 개선 \requester:JSB \updater:MSB
+\Changelog:그래프 X/Y축 개별 스크롤 확대 기능 추가 \requester:JSB \updater:MSB
+\Changelog:확대 초기화 시 Start/Stop 주파수 기준 뷰 복원 \requester:JSB \updater:MSB
+\Changelog:X축 마커 추가 (우클릭 메뉴) \requester:JSB \updater:MSB
+
+\date:2025.12.06 \version:v1.0.08
+\Changelog:소자 저장 시 슬라이드바 Min/Max 값 저장 \requester:JSB \updater:MSB
+\Changelog:소자 값 변경 시 Graph Settings Apply 후 반영되도록 수정 (Single Shot/Run Mode 연동) \requester:JSB \updater:MSB
+\Changelog:Matching Range 모드 시 선택된 소자만 하이라이트 \requester:JSB \updater:MSB
+\Changelog:Zoom In/Out 시 그리드 사라짐 문제 해결 \requester:JSB \updater:MSB
+\Changelog:Matching Range 오버레이 뷰 지원 \requester:JSB \updater:MSB
+\Changelog:Matching Range 커서 포인트 표시 \requester:JSB \updater:MSB
+\Changelog:임피던스 마커 테이블 및 Matching Range 개선 \requester:JSB \updater:MSB
+\Details:임피던스/S11 주파수별 Y값 표시
+\Details:그래프 마커 추가 기능
+\Details:입력형 마커 추가 (예: 13.56MHz)
+\Details:Matching Range 마커 테이블 (R, X 직접 입력)
+\Changelog:마커 포인트 스타일 변경 (노란색 역삼각형) \requester:JSB \updater:MSB
+\Changelog:포트 기준 임피던스 표시 \requester:JSB \updater:MSB
+\Changelog:현재 임피던스 값 오버레이 (R+jX, 노란색) \requester:JSB \updater:MSB
+\Changelog:부품 배치 후 숫자 입력 시 즉시 값 변경 \requester:JSB \updater:MSB
+\Changelog:부품/와이어/포트 클릭 자동 선택 \requester:JSB \updater:MSB
+\Changelog:부품 접점 클릭 시 자동 와이어 연결 \requester:JSB \updater:MSB
+\Changelog:회로 시트 클릭 시 자동 선택 해제 \requester:JSB \updater:MSB
+\Changelog:부품 드래그 시 가이드(고스트) 표시 \requester:JSB \updater:MSB
+\Changelog:Lin R |X| 포맷 추가 \requester:JSB \updater:MSB
+\Changelog:부품 마우스 오버 툴팁 표시 \requester:JSB \updater:MSB
+\Changelog:Wire 연결 방식 추가 (Click-Move-Click) \requester:JSB \updater:MSB
+\Changelog:다중 선택 이동 기능 및 Wire Stretch 구현 \requester:JSB \updater:MSB
+\Changelog:마커 테이블 개선 \requester:JSB \updater:MSB
+\Details:X, Y값 표시 (더블클릭 시 S파라미터/임피던스 모드 전환)
+\Details:R, X / 크기, 위상 / 소자값 
+\Changelog:마커 테이블 설정(레이아웃) 추가 \requester:JSB \updater:MSB
+\Changelog:마커 삭제 방식 개선 \requester:JSB \updater:MSB
+\Changelog:UI 레이아웃 변경 (RF Circuit Simulator) \requester:JSB \updater:MSB
+\Details:헤더 제거, 주파수 설정 및 우측 설정을 회로 상단/우측으로 통합
+\Changelog:마커 값 입력 약어 지원 (M, k, m 등) \requester:JSB \updater:MSB
+\Changelog:Component 파라미터 설정 종료 UX 개선 (빈 공간 클릭) \requester:JSB \updater:MSB
+\Changelog:Lin R X 절대값 옵션 추가 \requester:JSB \updater:MSB
+\Changelog:Lin R X 데이터 로드 버그 수정 \requester:JSB \updater:MSB
+\Changelog:마커 주파수 휠 조절 이동 기능 \requester:JSB \updater:MSB
+\Changelog:마커 표시 위치 개선 (그래프 겹침 방지) \requester:JSB \updater:MSB
+\Changelog:마커 값 클릭 시 모드 순환 \requester:JSB \updater:MSB
+\Changelog:마커 타이틀 간소화 (Value) \requester:JSB \updater:MSB
+\Changelog:Delete 타이틀 제거 (X 표시 유지) \requester:JSB \updater:MSB
+\Changelog:회로 연결 편의성 개선 (접점 분리/재연결) \requester:JSB \updater:MSB
+\Changelog:Lin R X Imaginary 음수 색상 설정 추가 \requester:JSB \updater:MSB
+\Changelog:마커 테이블 유지성 개선 (파일 로드 시 유지) \requester:JSB \updater:MSB
+\Changelog:저해상도 UI 개선 (1200px 미만) \requester:JSB \updater:MSB
+\Changelog:스미스 차트 100포인트 이상 렌더링 수정 \requester:JSB \updater:MSB
+\Changelog:마커 테이블 폰트 설정 추가 \requester:JSB \updater:MSB
+\Changelog:Component Modal Manual 체크박스 및 Min값 정책 수정 \requester:JSB \updater:MSB
+\Changelog:마커 위 값 표시 옵션 추가 \requester:JSB \updater:MSB
+\Changelog:마커 테이블 Row/Column 설정 추가 \requester:JSB \updater:MSB
+\Changelog:그리기 도구(Paint) 추가 \requester:JSB \updater:MSB
+\Changelog:그래프 설정 모달 탭 분리 (Measurement / Display) \requester:JSB \updater:MSB
+
+\date:2025.12.07 \version:v1.0.53
+\Changelog:스미스 차트 마커 값 표시 \requester:JSB \updater:MSB
+\Changelog:마커 Value Show/Hide 옵션 이동 (Display 탭) \requester:JSB \updater:MSB
+\Changelog:임피던스 R+jX 포맷 휠 조절 버그 수정 \requester:JSB \updater:MSB
+\Changelog:그리기 도구 펜 색상 단축키 및 팔레트 추가 \requester:JSB \updater:MSB
+\Changelog:Grab 모드에 Paint 도구 통합 \requester:JSB \updater:MSB
+\Changelog:Undo/Redo (Ctrl+Z/Y) 기능 구현 \requester:JSB \updater:MSB
+\Changelog:이력 관리(History) 시스템 구축 \requester:JSB \updater:MSB
+\Changelog:Ground 다중 배치 시 해석 오류 수정 \requester:JSB \updater:MSB
+\Changelog:부품 값 휠 감도 조절(Global) 기능 추가 \requester:JSB \updater:MSB
+\Changelog:우측 설정창 단축키 지원 \requester:JSB \updater:MSB
+\Changelog:텍스트 입력 UX 개선 (배경 클릭 입력) \requester:JSB \updater:MSB
+\Changelog:Paint 모드 ESC 동작 개선 (1회: 도구 해제, 2회: 모드 종료) \requester:JSB \updater:MSB
+\Changelog:마커 테이블 스크롤 개선 \requester:JSB \updater:MSB
+\Changelog:마커 ID 생성 규칙 변경 \requester:JSB \updater:MSB
+\Changelog:마커 폰트 가독성 개선 \requester:JSB \updater:MSB
+\Changelog:드래그 선택 로직 개선 (방향별 포함/걸침 선택) \requester:JSB \updater:MSB
+\Changelog:임피던스 마커/스미스 차트 간 동기화 버그 수정 \requester:JSB \updater:MSB
+\Changelog:ID Gap Filling 알고리즘 적용 \requester:JSB \updater:MSB
+\Changelog:Paint 객체 선택 버그 수정 \requester:JSB \updater:MSB
+\Changelog:와이어 히트박스 개선 \requester:JSB \updater:MSB
+\Changelog:시트 선택 상태 동작 개선 \requester:JSB \updater:MSB
+\Changelog:전압 시각화(Color) 추가 \requester:JSB \updater:MSB
+\Changelog:Show Voltage 기능 구현 (우클릭) \requester:JSB \updater:MSB
+\Changelog:화면 분할 비율 조정 시 줌 레벨 자동 계산 \requester:JSB \updater:MSB
+\Changelog:Smith Chart 입력 임피던스 표시 설정 추가 \requester:JSB \updater:MSB
+\Changelog:저장 포맷 분리 (RF Circuit / Falstad Script) \requester:JSB \updater:MSB
+\Changelog:고정 임피던스 블록(Impedance Block) 추가 \requester:JSB \updater:MSB
+\Changelog:CSV 데이터 로드 시 스미스 차트 표시 버그 수정 \requester:JSB \updater:MSB
+\Changelog:부품 주파수 응답 그래프 표시 추가 \requester:JSB \updater:MSB
+\Changelog:Component ID 사용자 변경 기능 추가 \requester:JSB \updater:MSB
+\Changelog:그래프 Auto Scale 로직 개선 \requester:JSB \updater:MSB
+\Changelog:Graph Display Min/Max 수동 설정 추가 \requester:JSB \updater:MSB
+\Changelog:복소수 파라미터(R+jX) 지원 확인 \requester:JSB \updater:MSB
+
+\date:2025.12.08 \version:v1.0.52-update
+\Changelog:부품 병합 기능 (Impedance Plot용) \requester:JSB \updater:MSB
+\Changelog:개별/Test Block 임피던스 그래프 지원 \requester:JSB \updater:MSB
+
+\date:2025.12.09 \version:v1.0.53
+\Changelog:Integrated Component UI 개선 (그룹화) \requester:JSB \updater:MSB
+\Changelog:Plot Impedance(Group) 입출력 Wire 선택 기능 추가 \requester:JSB \updater:MSB
+
+\date:2025.12.10 \version:v1.0.54
+\Changelog:Paint 객체 저장/로드 지원 \requester:JSB \updater:MSB
+\Changelog:Falstad Script 창 분리 \requester:JSB \updater:MSB
+\Changelog:Save Circuit 포맷 최적화 (JSON 코드 제거) \requester:JSB \updater:MSB
+
+\date:2025.12.11 \version:v1.0.56
+\Changelog:그룹화 로직 변경 (가상 회로 삭제, 시각화 중심) \requester:JSB \updater:MSB
+\Changelog:Paint ID 부여 및 subName 속성 추가 \requester:JSB \updater:MSB
+
+\date:2025.12.12 \version:v1.0.57
+\Changelog:화살표 굵기 변경 기능 추가 \requester:JSB \updater:MSB
+\Changelog:Include Paint 체크박스 버그 수정 \requester:JSB \updater:MSB
+
+\date:2025.12.12 \version:v1.0.58
+\Changelog:Plot Impedance(Group) Port/Gnd 설정을 Wire 선택 방식으로 변경 \requester:JSB \updater:MSB
+\Changelog:다중 Plot Impedance 그래프 색상 구분 \requester:JSB \updater:MSB
+\Changelog:Plot Impedance: S11 그래프 지원 \requester:JSB \updater:MSB
+\Changelog:소수점 표시 자릿수 변경 (3 → 2자리) \requester:JSB \updater:MSB
+
+\date:2025.12.14 \version:v1.0.60
+\Changelog:Group Components Plot Impedance UI 개선 (십자 커서) \requester:JSB \updater:MSB
+\Changelog:그래프 범위 0 설정 버그 수정 \requester:JSB \updater:MSB
+\Changelog:축 라벨 더블클릭 시 설정 탭 이동 기능 \requester:JSB \updater:MSB
+\Changelog:그래프 클리어 기능 추가 \requester:JSB \updater:MSB
+\Changelog:부품 임피던스 Plot R, X 포맷 지원 \requester:JSB \updater:MSB
+\Changelog:그룹화 부품 와이어 선택 피드백 강화 \requester:JSB \updater:MSB
+\Changelog:X-Axis Auto Scale 및 Min/Max 설정 추가 \requester:JSB \updater:MSB
+\Changelog:Paint 모드 상호작용 로직 개선 \requester:JSB \updater:MSB
+\Changelog:Copy/Paste (복사/붙여넣기) 기능 추가 \requester:JSB \updater:MSB
+\Changelog:더블클릭 동작 개선 (모달 열기/닫기) \requester:JSB \updater:MSB
+
+\date:2026.01.07 \version:v1.0.63
+\Changelog:Transmission Line 모드 추가 \requester:JSB \updater:MSB
+\Details:(기존) Standard : Z_0, Velocity, Loss, Length
+\Details:(추가) Physical : R, L, G, C, Length
+
+\date:2026.01.12 \version:v1.0.64
+\Changelog:Impedance Plot Measurement 변경 \requester:JSB \updater:MSB
+\Details:Meas → Format
+\Changelog:SParameter S12, S21, S22 추가 \requester:JSB \updater:MSB
+\Changelog:Matching Range 수정 \requester:JSB \updater:MSB
+\Details:인덕터 범위 수정 후 apply 시 Graph Settings → Matching Range 부품 범위 갱신
+\Changelog:Transmission Line 변경 \requester:JSB \updater:MSB
+\Details:특성 임피던스 → 복소수 특성 임피던스 적용
+
+\date:2026.01.13 \version:v1.0.65
+\Changelog:Plot Impedance \requester:JSB \updater:MSB
+\Details:Group Components 시 Plot Impedance 안되던 문제 해결(병렬 Group Components)
+\Details:Virtual Circuit Viewer 추가 (Group Components 우클릭 → View Virtual Circuit)
+
+\date:2026.01.13 \version:v1.0.66
+\Changelog:components/wire connection 하이라이트 버그 패치 \requester:JSB \updater:MSB
+\Details:component - component terminal 연결 시, 연결 표시(초록색) 즉시 적용
+\Details:wire를 move시켜 component의 terminal에 연결 시, 연결 표시(초록색) 적용
+\Changelog:wire to wire 연결 시 연결 시각화 업데이트 \requester:JSB \updater:MSB
+\Details:wire를 생성하여 기존 wire에 연결할 때 기존 wire에 하이라이트 적용
+\Details:wire를 move하여 다른 wire에 연결할 때 다른 wire에 하이라이트 적용
+
+\date:2026.01.13 \version:v1.0.67
+\Changelog:View Virtual Circuit : Port, Ground 안보이는 버그 개선 \requester:JSB \updater:MSB
+\Changelog:Group Components의 Impedance Plot 계산 방식 변경 \requester:JSB \updater:MSB
+\Details:원본 회로에서 해당 component/wire만 떼서 계산 수행(전) → 해당 가상 회로 시뮬레이션(후) \requester:JSB \updater:MSB
+
+\date:2026.01.13 \version:v1.0.68
+\Changelog:Group Components 관련 용어 수정 \requester:JSB \updater:MSB
+\Details:Create Integrated Components → Create Test Block
+\Details:Plot Impedance(Group) → Configure Test Ports
+\Details:Plot Impedance → Simulate Component
+\Details:View Virtual Circuit → View Test Block Circuit
+
+\date:2026.01.15 \version:v1.0.69
+\Changelog:PatchNote Modal 추가\requester:JSB \updater:MSB
+\Details:기본 최근 한달 Patch이력 표시
+\Details:하단 Load More(Earlier than 1 month) 버튼으로 더 보기 가능
+\Details:Don't show for 3 days 체크 박스로 3일 동안 안보기 가능
+
+\date:2026.01.15 \version:v1.0.69 
+\Changelog:Block Circuit Simulation Graph 렌더링 개선 \requester:MSB \updater:MSB
+\Details:GraphSettings에서 Format을 바꾸어도 그래프가 보이도록 개선
+
+\date:2026.01.16 \version:v1.0.70
+\Changelog:Ground, Port의 Terminal 연결 이펙트 개선 \requester:JSB \updater:MSB
+\Details:Ground, Port의 Terminal도 이제 Component의 Terminal과 직접 연결될 때도 연결 이펙트 활성
+\Changelog:Block UX 개선\requester:JSB \updater:MSB
+\Details:Block 선택 시 내부 component/wire가 잡히는 대신, BLOCK을 인식하고 잡히도록 개선
+\Details:Block에 대해서 Configure Test Ports 수행 시 Input Terminal과 Ground Terminal은 이제 Block의 내부 component/wire만 선택 가능

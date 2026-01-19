@@ -26,7 +26,7 @@ class SParameterGraph {
 
         // Format/Meas 설정
         this.currentFormat = 'logMag';  // logMag, linMag, phase, swr, delay, smith
-        this.currentMeas = 'impedance';       // S11, S21, S12, S22, ... or impedance or matchingRange
+        this.currentMeas = 'S11';       // S11, S21, S12, S22, ... or impedance or matchingRange
         this.currentXAxisScale = 'linear'; // 'linear' or 'logarithmic'
 
         // Smith Chart Renderer (for smith format and matching range)
@@ -566,6 +566,15 @@ class SParameterGraph {
     }
 
     /**
+     * Set Measurement (S11, S21, etc.)
+     */
+    setMeas(meas) {
+        this.currentMeas = meas;
+        this.updateGraphTitle();
+        this.refreshData(); // Data needs update
+    }
+
+    /**
      * Refresh markers with current dataset values
      */
     refreshMarkers() {
@@ -638,8 +647,8 @@ class SParameterGraph {
 
         // Check if switching to/from Smith chart mode
         const wasSmithMode = this.isSmithChartMode;
-        // ENABLE SMITH CHART for 'smith', 'SParameter', or 'Impedance' format, OR 'matchingRange' measurement
-        this.isSmithChartMode = (format === 'smith' || format === 'SParameter' || format === 'impedance' || format === 'Impedance') || (this.currentMeas === 'matchingRange');
+        // ENABLE SMITH CHART for 'smith' or 'SParameter' format, OR 'matchingRange' measurement
+        this.isSmithChartMode = (format === 'smith' || format === 'SParameter') || (this.currentMeas === 'matchingRange');
 
         if (this.isSmithChartMode && !wasSmithMode) {
             this.initSmithChart();
@@ -1286,7 +1295,10 @@ class SParameterGraph {
         const currentMeas = this.currentMeas; // 'S11' or 'impedance'
         const currentFormat = this.currentFormat;
 
+        console.log('Graph: updateData settings', { currentMeas, currentFormat });
+
         let yData = [];
+        let complexZData = null;
 
 
 
@@ -1295,21 +1307,13 @@ class SParameterGraph {
             let yDataR = [];
             let yDataX = [];
 
-            if (currentMeas === 'impedance') {
-                const zin = results.zin;
-                yDataR = zin.map(z => z.real);
-                yDataX = zin.map(z => Math.abs(z.imag));
-            } else {
-                if (!results.sMatrix || !results.sMatrix[currentMeas]) return;
-                const sData = results.sMatrix[currentMeas];
-                yDataR = sData.complex.map(c => c.real);
-                yDataX = sData.complex.map(c => Math.abs(c.imag));
-            }
+            if (!results.sMatrix || !results.sMatrix[currentMeas]) return;
+            const sData = results.sMatrix[currentMeas];
+            yDataR = sData.complex.map(c => c.real);
+            yDataX = sData.complex.map(c => Math.abs(c.imag));
 
             const datasetR = {
-                label: currentMeas === 'impedance' ? 'Resistance' : 'Real',
-                data: frequencies.map((f, i) => ({ x: f, y: yDataR[i] })),
-                label: currentMeas === 'impedance' ? 'Resistance' : 'Real',
+                label: 'Real',
                 data: frequencies.map((f, i) => ({ x: f, y: yDataR[i] })),
                 borderColor: this.getDynamicBorderColor(this.colors.simulation.line), // Default Blue
                 borderWidth: this.getDynamicBorderWidth(),
@@ -1323,10 +1327,8 @@ class SParameterGraph {
             };
 
             const datasetX = {
-                label: (currentMeas === 'impedance'
-                    ? (this.config.absoluteImag ? '|Reactance|' : 'Reactance')
-                    : (this.config.absoluteImag ? '|Imag|' : 'Imag')),
-                data: frequencies.map((f, i) => ({ x: f, y: this.config.absoluteImag ? yDataX[i] : (currentMeas === 'impedance' ? this.simulationResults.zin[i].imag : this.simulationResults.sMatrix[currentMeas].complex[i].imag) })),
+                label: (this.config.absoluteImag ? '|Imag|' : 'Imag'),
+                data: frequencies.map((f, i) => ({ x: f, y: this.config.absoluteImag ? yDataX[i] : this.simulationResults.sMatrix[currentMeas].complex[i].imag })),
                 borderColor: (this.currentFormat === 'linRabsX' && !this.config.absoluteImag && this.config.highlightNegative)
                     ? (context) => this.getNegativeGradient(context, '#ff922b', '#4ecdc4') // Pos: Orange, Neg: Teal
                     : '#ff922b', // Default Orange (matches Point Fill)
@@ -1347,33 +1349,58 @@ class SParameterGraph {
 
         } else {
             // Standard single dataset handling
-            let yData = [];
-            if (currentMeas === 'impedance') {
-                const zin = results.zin;
-                yData = zin.map(z => {
-                    switch (currentFormat) {
-                        case 'logMag': return z.magnitude() > 0 ? 20 * Math.log10(z.magnitude()) : -100;
-                        case 'linMag': return z.magnitude();
-                        case 'phase': return z.phaseDeg();
-                        default: return z.magnitude();
-                    }
-                });
-            } else {
-                if (!results.sMatrix || !results.sMatrix[currentMeas]) return;
-                const sData = results.sMatrix[currentMeas];
-                switch (currentFormat) {
-                    case 'logMag': yData = sData.mag_db; break;
-                    case 'linMag': yData = sData.complex.map(c => c.magnitude()); break;
-                    case 'phase': yData = sData.phase; break;
-                    case 'swr': yData = sData.mag_db.map(db => FormatConverter.dbToSwr(db)); break;
-                    default: yData = sData.mag_db;
-                }
+            if (!results.sMatrix || !results.sMatrix[currentMeas]) return;
+            const sData = results.sMatrix[currentMeas];
+
+
+            switch (currentFormat) {
+                case 'logMag': yData = sData.mag_db; break;
+                case 'linMag': yData = sData.complex.map(c => c.magnitude()); break;
+                case 'phase': yData = sData.phase; break;
+                case 'swr': yData = sData.mag_db.map(db => FormatConverter.dbToSwr(db)); break;
+                case 'impedance':
+                    // Calculate Z from Gamma: Z = Z0 * (1 + G) / (1 - G)
+                    const z0 = (results.config && results.config.z0) ? results.config.z0 : 50;
+                    complexZData = sData.complex.map(gamma => {
+                        const onePlusG = gamma.add(new Complex(1, 0));
+                        const oneMinusG = new Complex(1, 0).sub(gamma);
+                        if (oneMinusG.magnitude() < 1e-9) return new Complex(1e9, 0);
+                        return onePlusG.div(oneMinusG).scale(z0);
+                    });
+                    yData = complexZData.map(z => z.magnitude());
+                    break;
+                default: yData = sData.mag_db;
+            }
+            switch (currentFormat) {
+                case 'logMag': yData = sData.mag_db; break;
+                case 'linMag': yData = sData.complex.map(c => c.magnitude()); break;
+                case 'phase': yData = sData.phase; break;
+                case 'swr': yData = sData.mag_db.map(db => FormatConverter.dbToSwr(db)); break;
+                case 'impedance':
+                    // Calculate Z from Gamma: Z = Z0 * (1 + G) / (1 - G)
+                    const z0 = (results.config && results.config.z0) ? results.config.z0 : 50;
+                    complexZData = sData.complex.map(gamma => {
+                        const onePlusG = gamma.add(new Complex(1, 0));
+                        const oneMinusG = new Complex(1, 0).sub(gamma);
+                        if (oneMinusG.magnitude() < 1e-9) return new Complex(1e9, 0);
+                        return onePlusG.div(oneMinusG).scale(z0);
+                    });
+                    yData = complexZData.map(z => z.magnitude());
+                    break;
+                default: yData = sData.mag_db;
             }
 
             // 데이터셋 구성 (Scriptable Options 적용)
             this.simulationData = {
                 label: currentMeas === 'impedance' ? 'Zin (Sim)' : `${currentMeas} (Sim)`,
-                data: frequencies.map((f, i) => ({ x: f, y: yData[i] })),
+                data: frequencies.map((f, i) => {
+                    const point = { x: f, y: yData[i] };
+                    // Attach complex data for markers if available
+                    if (currentFormat === 'impedance' && complexZData && complexZData[i]) {
+                        point.extra = { r: complexZData[i].real, x: complexZData[i].imag };
+                    }
+                    return point;
+                }),
 
                 // Scriptable Options
                 borderColor: this.getDynamicBorderColor(this.colors.simulation.line),
@@ -1388,11 +1415,10 @@ class SParameterGraph {
             };
         }
 
-        // Y축 라벨 업데이트
         if (this.chart) {
             let label = '';
-            if (currentMeas === 'impedance') {
-                label = this.impedanceFormatConfig[currentFormat]?.label || 'Value';
+            if (currentFormat === 'impedance') {
+                label = this.impedanceFormatConfig[currentFormat]?.label || '|Z| (Ω)';
             } else {
                 label = this.formatConfig[currentFormat]?.label || 'Value';
             }
@@ -1411,25 +1437,7 @@ class SParameterGraph {
             // Calculate Gamma points for the entire frequency range
             let gammaPoints = [];
 
-            if (currentMeas === 'impedance' && results.zin) {
-                // Convert Zin to Gamma
-                // Use system Z0 from simulation config, default to 50 if missing
-                const systemZ0 = (results.config && results.config.z0) ? results.config.z0 : 50;
-
-                gammaPoints = results.zin.map((z, i) => {
-                    const rNorm = z.real / systemZ0;
-                    const xNorm = z.imag / systemZ0;
-                    const den = (rNorm + 1) * (rNorm + 1) + xNorm * xNorm;
-
-                    const freq = (results.frequencies && results.frequencies[i] !== undefined) ? results.frequencies[i] : null;
-
-                    if (den === 0) return { real: 1, imag: 0, freq: freq };
-
-                    const gr = ((rNorm * rNorm) + (xNorm * xNorm) - 1) / den;
-                    const gi = (2 * xNorm) / den;
-                    return { real: gr, imag: gi, freq: freq };
-                });
-            } else if (results.sMatrix) {
+            if (results.sMatrix) {
                 // S-Parameters are already Gamma (reflection coefficient)
                 // Use currentMeas (e.g. 'S11', 'S21') if available, otherwise default to 'S11'
                 const measKey = (currentMeas && results.sMatrix[currentMeas]) ? currentMeas : 'S11';
@@ -1535,6 +1543,70 @@ class SParameterGraph {
                 // Add to Smith Traces (Directly)
                 componentTracesForSmith.push({
                     label: comp.id,
+                    points: smithPoints,
+                    color: color
+                });
+            });
+
+        }
+
+        // Re-process Extra (Ad-hoc) Traces
+        // These are traces added manually via addComponentTrace (e.g. Test Block internals)
+        if (this.extraComponentTraces && this.extraComponentTraces.length > 0) {
+            this.extraComponentTraces.forEach(traceInfo => {
+                // Determine Z0. If simulation result has Z0, use it. Otherwise 50.
+                const z0 = (this.simulationResults && this.simulationResults.config && this.simulationResults.config.z0) ? this.simulationResults.config.z0 : 50;
+
+                // Re-calculate Smith Points (Gamma) based on current Z0
+                const smithPoints = [];
+                const { label, frequencies, zin: zinData, color } = traceInfo;
+
+                frequencies.forEach((f, i) => {
+                    let z = zinData[i];
+                    if (!z) return;
+
+                    let real, imag;
+                    // Robust Complex Extraction
+                    if (typeof z.real === 'number' && typeof z.imag === 'number') {
+                        real = z.real; imag = z.imag;
+                    } else if (typeof z.magnitude === 'function') {
+                        real = z.real; imag = z.imag;
+                    } else {
+                        return;
+                    }
+
+                    // Gamma Calculation
+                    // Handle Infinity (Open Circuit)
+                    let gr = 1, gi = 0;
+                    if (!isFinite(real) || real > 1e15) {
+                        gr = 1; gi = 0;
+                    } else {
+                        const rNorm = real / z0;
+                        const xNorm = imag / z0;
+                        const den = (rNorm + 1) * (rNorm + 1) + xNorm * xNorm;
+                        if (den !== 0) {
+                            gr = ((rNorm * rNorm) + (xNorm * xNorm) - 1) / den;
+                            gi = (2 * xNorm) / den;
+                        }
+                    }
+
+                    smithPoints.push({
+                        real: gr, imag: gi, freq: f, impedance: { r: real, x: imag }
+                    });
+                });
+
+                // Add to Cartesian Dataset
+                this.componentImpedanceDatasets.push({
+                    label: label,
+                    frequencies: frequencies,
+                    zin: zinData,
+                    color: color,
+                    visible: true
+                });
+
+                // Add to Smith Traces
+                componentTracesForSmith.push({
+                    label: label,
                     points: smithPoints,
                     color: color
                 });
@@ -1670,7 +1742,12 @@ class SParameterGraph {
                     // Check Source Data Type (Impedance or S-Param)
                     const isSourceImpedance = (dataset.metadata && dataset.metadata.sParameter && dataset.metadata.sParameter.toLowerCase() === 'impedance');
 
-                    if (currentMeas === 'impedance') {
+                    // Determine if we are targeting Impedance Domain
+                    // If Meas is 'impedance' (legacy) OR Format is explicitly 'impedance' (Impedance Mag)
+                    // Note: linRabsX is checked in previous block, so this is for standard formats (LogMag, ImpedanceMag etc)
+                    const isTargetImpedance = (currentMeas === 'impedance' || this.currentFormat === 'impedance' || this.currentFormat === 'Impedance');
+
+                    if (isTargetImpedance) {
                         if (!isSourceImpedance) {
                             // Source: S-Param -> Target: Impedance (Convert S to Z)
                             const den = Math.pow(1 - real, 2) + Math.pow(imag, 2);
@@ -1712,7 +1789,7 @@ class SParameterGraph {
                         case 'phase': return FormatConverter.complexToPhase(real, imag);
                         case 'swr':
                             // ... existing impedance SWR logic
-                            if (currentMeas === 'impedance') {
+                            if (isTargetImpedance) {
                                 let gR, gI;
                                 if (point.s11_real !== undefined) { gR = point.s11_real; gI = point.s11_imag; }
                                 else {
@@ -1860,6 +1937,7 @@ class SParameterGraph {
     clearComponentTraces() {
         this.componentImpedanceDatasets = [];
         this.componentTracesForSmith = [];
+        this.extraComponentTraces = []; // Also clear ad-hoc storage
 
         // Update Smith Chart
         if (this.smithChartRenderer) {
@@ -1923,6 +2001,16 @@ class SParameterGraph {
             zin: zinData,
             color: color,
             visible: true
+        });
+
+        // Store in Extra Traces for persistance across Format changes
+        if (!this.extraComponentTraces) this.extraComponentTraces = [];
+        // Check if exists? Overwrite or Append? Usually Overwrite if same label?
+        // Let's Append for now, or Filter.
+        // If we re-add same label, remove old one.
+        this.extraComponentTraces = this.extraComponentTraces.filter(t => t.label !== label);
+        this.extraComponentTraces.push({
+            label, frequencies, zin: zinData, color
         });
 
         // --- Smith Chart Integration ---
@@ -2128,7 +2216,11 @@ class SParameterGraph {
                                 let valToConvert = z;
                                 const isSParamMeas = this.currentMeas && this.currentMeas.toUpperCase().startsWith('S');
 
-                                if (isSParamMeas) {
+                                // Determine if we should KEEP Impedance (Z)
+                                // If Format is 'impedance' (Impedance Mag), we want to plot Z magnitude, not Gamma.
+                                const isTargetImpedance = (this.currentFormat === 'impedance' || this.currentFormat === 'Impedance');
+
+                                if (isSParamMeas && !isTargetImpedance) {
                                     // Convert Z to Gamma
                                     const z0 = (this.simulationResults && this.simulationResults.config && this.simulationResults.config.z0) ? this.simulationResults.config.z0 : 50;
                                     // Gamma = (Z - Z0) / (Z + Z0)
@@ -2350,16 +2442,9 @@ class SParameterGraph {
             return 'Matching Range - Smith Chart';
         }
 
-        // Impedance일 때 더 명확한 제목
-        if (this.currentMeas === 'impedance') {
-            const impedanceFormatNames = {
-                logMag: '|Z| (dBΩ)',
-                linMag: '|Z| (Ω)',
-                phase: 'Z Phase (°)',
-                smith: 'Smith Chart',
-                linRabsX: this.config.absoluteImag ? 'R, |X| (Ω)' : 'R, X (Ω)'
-            };
-            return `Impedance ${impedanceFormatNames[this.currentFormat] || formatNames[this.currentFormat]} vs Frequency`;
+        // Impedance Format Handling
+        if (this.currentFormat === 'impedance') {
+            return `${this.currentMeas} Impedance Magnitude (|Z|) vs Frequency`;
         }
 
         // Smith chart format
@@ -2754,34 +2839,44 @@ class SParameterGraph {
 
         if (closestIdx === -1) return null;
 
-        // Use Impedance data if mode is Impedance OR if it's S11 (Input Reflection)
-        // This ensures markers on Smith Chart show Impedance (Ohm) instead of Gamma (Unitless)
-        if (this.currentMeas === 'impedance' || this.currentMeas === 'S11') {
-            if (this.simulationResults.zin && this.simulationResults.zin[closestIdx]) {
-                const z = this.simulationResults.zin[closestIdx]; // {real, imag}
-                return { r: z.real, x: z.imag };
-            }
-        }
+        // Determine if we need Impedance (Z) or S-Parameter (Gamma)
+        // If Logic: 
+        // 1. If Format is 'impedance' -> return Z
+        // 2. If Smith Chart Mode -> return Z (Markers on Smith usually show Z)
+        // 3. Else -> return S-Parameter (Gamma)
 
-        // Other S-Parameters or fallback
-        if (this.currentMeas !== 'impedance' && this.currentMeas !== 'S11') {
-            // S-Parameters (S11, S21, etc)
+        const isImpedanceView = (this.currentFormat === 'impedance' || this.isSmithChartMode);
+
+        if (isImpedanceView) {
+            // Calculate Z from current S-Parameter
+            // Z = Z0 * (1 + G) / (1 - G)
             const sMatrix = this.simulationResults.sMatrix;
-            if (sMatrix) {
-                // 1. Try Key Access (Standard)
-                if (sMatrix[this.currentMeas]) {
-                    // Check if it's the processed Map form with 'complex' array
-                    if (sMatrix[this.currentMeas].complex && sMatrix[this.currentMeas].complex[closestIdx]) {
-                        const c = sMatrix[this.currentMeas].complex[closestIdx];
-                        return { r: c.real, x: c.imag };
-                    }
-                }
+            const currentMeas = this.currentMeas; // e.g. 'S11'
 
-                // 2. Fallback: Array Access (Legacy support if data structure differs)
-                // Try to find if currentMeas matches a port index pattern if needed, 
-                // but usually updateSimulationDataForCurrentSettings relies on key access.
-                // If specific key fails, checking [0][0] is risky as it implies S11 always.
-                // We will stick to key access as primary.
+            if (sMatrix && sMatrix[currentMeas] && sMatrix[currentMeas].complex) {
+                const gamma = sMatrix[currentMeas].complex[closestIdx];
+                if (gamma) {
+                    const z0 = 50;
+                    const onePlusG = gamma.add(new Complex(1, 0));
+                    const oneMinusG = new Complex(1, 0).sub(gamma);
+
+                    // Singular point check
+                    if (oneMinusG.magnitude() < 1e-9) return { r: 1e9, x: 0 };
+
+                    const z = onePlusG.div(oneMinusG).scale(z0);
+                    return { r: z.real, x: z.imag };
+                }
+            }
+        } else {
+            // Standard S-Parameter Data (Gamma)
+            const sMatrix = this.simulationResults.sMatrix;
+            const currentMeas = this.currentMeas;
+
+            if (sMatrix && sMatrix[currentMeas]) {
+                if (sMatrix[currentMeas].complex && sMatrix[currentMeas].complex[closestIdx]) {
+                    const c = sMatrix[currentMeas].complex[closestIdx];
+                    return { r: c.real, x: c.imag };
+                }
             }
         }
         return null;

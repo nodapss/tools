@@ -6,12 +6,12 @@ class Ground extends Component {
     constructor(x, y) {
         super('GND', x, y);
         this.params = {};
-        
+
         // Ground has only one terminal (top) - aligned to grid
         this.terminals = {
             start: { x: 0, y: -20 }
         };
-        
+
         // Re-snap after setting terminals
         this.snapTerminalsToGrid();
     }
@@ -37,7 +37,7 @@ class Ground extends Component {
      */
     renderTerminals() {
         const offset = this.terminals.start;
-        const connected = this.connections.start !== null;
+        const connected = this.connections.start !== null || (this.directConnections && this.directConnections.start);
         return `<circle class="terminal ${connected ? 'connected' : ''}" 
                        data-terminal="start"
                        cx="${offset.x}" cy="${offset.y}" r="4"/>`;

@@ -10,7 +10,7 @@ class GraphController {
 
         this.settings = {
             format: 'logMag',
-            meas: 'impedance',
+            meas: 'S11', // Default to S11 instead of impedance
             xAxisScale: 'linear',
             xAxis: {
                 autoScale: true,
@@ -72,8 +72,12 @@ class GraphController {
 
         // Bind graph settings button
         const btnGraphSettings = document.getElementById('btnGraphSettings');
+        console.log('GraphController: Binding btnGraphSettings:', !!btnGraphSettings);
         if (btnGraphSettings) {
-            btnGraphSettings.addEventListener('click', () => this.openSettingsModal());
+            btnGraphSettings.addEventListener('click', (e) => {
+                console.log('GraphController: Settings button clicked');
+                this.openSettingsModal();
+            });
         }
 
         // Bind float graph button
@@ -141,6 +145,25 @@ class GraphController {
                 this.handleAxisDoubleClick(e.detail.axis);
             });
         }
+
+        // Listen for component range changes to update Matching Range UI
+        window.addEventListener('component-range-changed', () => {
+            const modal = document.getElementById('graphSettingsModal');
+            const isActive = modal && modal.classList.contains('active');
+            const isMatchingRange = this.settings.meas === 'matchingRange';
+
+            console.log('[GraphController] Received component-range-changed', {
+                modalExists: !!modal,
+                isActive,
+                meas: this.settings.meas,
+                shouldUpdate: isActive && isMatchingRange
+            });
+
+            if (isActive && isMatchingRange) {
+                console.log('[GraphController] Refreshing Matching Range UI');
+                this.populateComponentCheckboxes();
+            }
+        });
     }
 
     /**
@@ -428,7 +451,8 @@ class GraphController {
                     sParams.push(`S${i}${j}`);
                 }
             }
-            const options = [...sParams, 'impedance'];
+
+            const options = [...sParams]; // Removed 'impedance'
 
             this.externalWindow.postMessage({
                 type: 'INIT_MEAS_OPTIONS',
@@ -436,6 +460,7 @@ class GraphController {
             }, '*');
         }
     }
+
 
     /**
      * Broadcast Matching Range Data
@@ -576,11 +601,6 @@ class GraphController {
             measSelect.appendChild(option);
         });
 
-        const impOption = document.createElement('option');
-        impOption.value = 'impedance';
-        impOption.textContent = 'Impedance';
-        measSelect.appendChild(impOption);
-
         // Add Matching Range option
         const matchingRangeOption = document.createElement('option');
         matchingRangeOption.value = 'matchingRange';
@@ -590,10 +610,11 @@ class GraphController {
         }
         measSelect.appendChild(matchingRangeOption);
 
-        const availableValues = [...sParams, 'impedance', 'matchingRange'];
+        const availableValues = [...sParams, 'matchingRange'];
         if (!availableValues.includes(this.settings.meas)) {
-            this.settings.meas = 'impedance';
-            measSelect.value = 'impedance';
+            // Default to S11 if current invalid (e.g. was impedance)
+            this.settings.meas = 'S11';
+            measSelect.value = 'S11';
         }
     }
 
@@ -806,8 +827,29 @@ class GraphController {
             const smithChartFreq = document.getElementById('smithChartFreq');
             const smithChartFreqUnit = document.getElementById('smithChartFreqUnit');
 
-            if (formatSelect) formatSelect.value = this.settings.format;
             if (measSelect) measSelect.value = this.settings.meas;
+
+            // Sync UI state (enable/disable options based on meas)
+            console.log('DEBUG_UI: Calling handleMeasChange...');
+            try {
+                this.handleMeasChange();
+                console.log('DEBUG_UI: handleMeasChange success');
+            } catch (e) {
+                console.error('DEBUG_UI: handleMeasChange failed', e);
+            }
+
+            // DEBUG LOG Start
+            console.log('DEBUG_UI:', {
+                settingFormat: this.settings.format,
+                selectValueBefore: formatSelect ? formatSelect.value : 'N/A',
+                impedanceOptionDisabled: formatSelect ? formatSelect.querySelector('option[value="impedance"]')?.disabled : 'N/A'
+            });
+            // DEBUG LOG End
+
+            if (formatSelect) {
+                formatSelect.value = this.settings.format;
+                console.log('DEBUG_UI: Select Value After:', formatSelect.value);
+            }
             if (xAxisSelect) xAxisSelect.value = this.settings.xAxisScale;
 
             // Y-Axis Scale UI Binding
@@ -1048,6 +1090,60 @@ class GraphController {
     }
 
     /**
+     * Set settings (e.g. from loaded file)
+     * Handles legacy migration and updates graph
+     */
+    setSettings(newSettings) {
+        if (!newSettings) return;
+
+        console.log('GraphController: setSettings called', newSettings);
+
+        // 1. Migration Logic (Legacy 'impedance' meas -> 'S11' meas + 'impedance' format)
+        if (newSettings.meas === 'impedance') {
+            console.warn('GraphController: Migrating legacy "impedance" setting');
+            newSettings.meas = 'S11';
+            newSettings.format = 'impedance';
+        }
+
+        // 2. Merge Settings
+        this.settings = { ...this.settings, ...newSettings };
+
+        // 3. Apply to SParameterGraph
+        if (this.sParamGraph) {
+            // Apply Format
+            if (this.settings.format) {
+                this.sParamGraph.setFormat(this.settings.format);
+            }
+            // Apply Measurement
+            if (this.settings.meas) {
+                this.sParamGraph.setMeas(this.settings.meas);
+            }
+            // Apply Axis Scale
+            if (this.settings.xAxisScale) {
+                this.sParamGraph.setXAxisScale(this.settings.xAxisScale);
+            }
+            // Apply Animation
+            if (this.settings.animation !== undefined) {
+                this.sParamGraph.setAnimation(this.settings.animation);
+            }
+        }
+
+        // 4. Update Float Window if open
+        this.broadcastSettings();
+
+        // 5. Update Modal UI if open (optional but good for consistency)
+        // If modal is active, re-sync values
+        const modal = document.getElementById('graphSettingsModal');
+        if (modal && modal.classList.contains('active')) {
+            const formatSelect = document.getElementById('formatSelect');
+            const measSelect = document.getElementById('measSelect');
+            if (formatSelect) formatSelect.value = this.settings.format;
+            if (measSelect) measSelect.value = this.settings.meas;
+            this.handleMeasChange(); // Refresh UI state
+        }
+    }
+
+    /**
      * Get current settings for saving
      */
     getSettings() {
@@ -1059,6 +1155,13 @@ class GraphController {
      */
     setSettings(newSettings) {
         if (!newSettings) return;
+
+        // Legacy Data Migration: 'impedance' measurement -> 'S11' meas + 'impedance' format
+        if (newSettings.meas === 'impedance') {
+            console.warn('GraphController: Migrating legacy impedance measurement to S11 + impedance format');
+            newSettings.meas = 'S11';
+            newSettings.format = 'impedance';
+        }
 
         // Merge settings
         this.settings = { ...this.settings, ...newSettings };
@@ -1401,6 +1504,16 @@ class GraphController {
 
                 // Calculate gamma at these values
                 const gamma = this.calculateGammaAtNValues(selectedComponents, values, centerFreq, invertReactance);
+
+                // [DEBUG-MR] Log Start, Mid, End points
+                if (i === 0 || i === Math.floor(numSteps / 2) || i === numSteps) {
+                    const mag = Math.sqrt(gamma.real * gamma.real + gamma.imag * gamma.imag);
+                    const phase = Math.atan2(gamma.imag, gamma.real) * (180 / Math.PI);
+                    console.log(`[Debug-MR] Edge ${edge + 1} | Step ${i}/${numSteps} | Sweep: ${changingComp.id} (${isIncreasing ? 'Min->Max' : 'Max->Min'})`);
+                    console.log(`[Debug-MR]   Values: ${values.map(v => v.toPrecision(4)).join(', ')}`);
+                    console.log(`[Debug-MR]   Gamma: r=${gamma.real.toFixed(5)}, i=${gamma.imag.toFixed(5)} (|G|=${mag.toFixed(5)}, Ang=${phase.toFixed(2)}°)`);
+                }
+
                 allPoints.push(gamma);
             }
         }

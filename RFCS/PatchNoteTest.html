@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PatchNote Parser Test</title>
+    <script src="js/utils/PatchNoteParser.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+
+        .success {
+            color: #4ec9b0;
+        }
+
+        .error {
+            color: #f44747;
+        }
+
+        .json {
+            color: #ce9178;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>PatchNote Parser Verification</h1>
+    <div id="result">Running test...</div>
+
+    <script>
+        const patchNoteContent = `
+\\date:2026.01.07 \\version:v1.0.63
+\\Changelog:Transmission Line 모드 추가 \\requester:JSB \\updater:MSB
+\\Details:(기존) Standard : Z_0, Velocity, Loss, Length
+\\Details:(추가) Physical : R, L, G, C, Length
+
+\\date:2026.01.12 \\version:v1.0.64
+\\Changelog:Impedance Plot Measurement 변경 \\requester:JSB \\updater:MSB
+\\Details:Meas → Format
+\\Changelog:SParameter S12, S21, S22 추가 \\requester:JSB \\updater:MSB
+\\Changelog:Matching Range 수정 \\requester:JSB \\updater:MSB
+\\Details:인덕터 범위 수정 후 apply 시 Graph Settings → Matching Range 부품 범위 갱신
+\\Changelog:Transmission Line 변경 \\requester:JSB \\updater:MSB
+\\Details:특성 임피던스 → 복소수 특성 임피던스 적용
+
+\\date:2026.01.13 \\version:v1.0.65
+\\Changelog:Plot Impedance \\requester:JSB \\updater:MSB
+\\Details:Group Components 시 Plot Impedance 안되던 문제 해결(병렬 Group Components)
+\\Details:Virtual Circuit Viewer 추가 (Group Components 우클릭 → View Virtual Circuit)
+
+\\date:2026.01.13 \\version:v1.0.66
+\\Changelog:components/wire connection 하이라이트 버그 패치 \\requester:JSB \\updater:MSB
+\\Details:component - component terminal 연결 시, 연결 표시(초록색) 즉시 적용
+\\Details:wire를 move시켜 component의 terminal에 연결 시, 연결 표시(초록색) 적용
+\\Changelog:wire to wire 연결 시 연결 시각화 업데이트 \\requester:JSB \\updater:MSB
+\\Details:wire를 생성하여 기존 wire에 연결할 때 기존 wire에 하이라이트 적용
+\\Details:wire를 move하여 다른 wire에 연결할 때 다른 wire에 하이라이트 적용
+
+\\date:2026.01.13 \\version:v1.0.67
+\\Changelog:View Virtual Circuit : Port, Ground 안보이는 버그 개선 \\requester:JSB \\updater:MSB
+\\Changelog:Group Components의 Impedance Plot 계산 방식 변경 \\requester:JSB \\updater:MSB
+\\Details:원본 회로에서 해당 component/wire만 떼서 계산 수행(전) → 해당 가상 회로 시뮬레이션(후) \\requester:JSB \\updater:MSB
+
+\\date:2026.01.13 \\version:v1.0.68
+\\Changelog:Group Components 관련 용어 수정 \\requester:JSB \\updater:MSB
+\\Details:Create Integrated Components → Create Test Block
+\\Details:Plot Impedance(Group) → Configure Test Ports
+\\Details:Plot Impedance → Simulate Component
+\\Details:View Virtual Circuit → View Test Block Circuit
+`;
+
+        try {
+            console.log("Parsing...");
+            const result = PatchNoteParser.parse(patchNoteContent);
+            console.log("Result:", result);
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<span class="success">Parsing Successful!</span>\n\nResult JSON:\n<span class="json">${JSON.stringify(result, null, 2)}</span>`;
+        } catch (e) {
+            console.error(e);
+            document.getElementById('result').innerHTML = `<span class="error">Parsing Failed: ${e.message}</span>`;
+        }
+    </script>
+</body>
+
+</html>

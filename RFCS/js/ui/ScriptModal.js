@@ -420,27 +420,17 @@ class ScriptModal {
                 }
 
                 // Graph Settings
-                if (data.graph && window.updateGraphSettingsState) {
-                    // Update main.js settings object (visual only as we apply directly below)
+                if (data.graph && window.graphController) {
+                    console.log('[ScriptModal] Applying graph settings via GraphController...');
+                    window.graphController.setSettings(data.graph);
+                } else if (data.graph && window.updateGraphSettingsState) {
+                    // Fallback (should not be needed if graphController exists)
+                    window.updateGraphSettingsState(data.graph);
                 }
 
-                if (window.sParamGraph && data.graph) {
-                    window.sParamGraph.setFormat(data.graph.format || 'logMag');
-                    window.sParamGraph.setMeas(data.graph.meas || 'impedance');
-                    window.sParamGraph.setXAxisScale(data.graph.xAxisScale || 'linear');
-                    window.sParamGraph.setAnimation(data.graph.animation || false);
-
-                    // Sync UI controls
-                    const formatSelect = document.getElementById('formatSelect');
-                    const measSelect = document.getElementById('measSelect');
-                    const xAxisSelect = document.getElementById('xAxisSelect');
-                    const animationToggle = document.getElementById('animationToggle');
-
-                    if (formatSelect && data.graph.format) formatSelect.value = data.graph.format;
-                    if (measSelect && data.graph.meas) measSelect.value = data.graph.meas;
-                    if (xAxisSelect && data.graph.xAxisScale) xAxisSelect.value = data.graph.xAxisScale;
-                    if (animationToggle && data.graph.animation !== undefined) animationToggle.checked = data.graph.animation;
-                }
+                // If sParamGraph exists but graphController missing (rare edge case), fallback manually?
+                // For now, assume graphController is main entry point. 
+                // We removed the direct DOM manipulation code here.
 
                 // Reset Graph pending
                 if (window.setGraphResetPending) {

@@ -1,4 +1,0 @@
-2026.01.07
-- Transmission Line 모드 추가
-	1. (기존) Standard : Z_0, Velocity, Loss, Length
-	2. (추가) Physical : R, L, G, C, Length

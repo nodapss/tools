@@ -553,14 +553,67 @@ class DragDropHandler {
      * Start Wire Selection Mode for Impedance Plot
      * @param {string} type 'input' or 'ground'
      * @param {function} callback (wireId) => void
+     * @param {object} scopeComponent Optional: IntegratedComponent to restrict selection to
      */
-    selectWireForImpedance(type, callback) {
-        this.wireSelectionMode = { type, callback };
+    selectWireForImpedance(type, callback, scopeComponent = null) {
+        this.wireSelectionMode = { type, callback, scopeComponent };
         this.svg.style.cursor = 'crosshair';
         this.svg.classList.add('selecting-wire');
 
+        // Apply Scope Restriction
+        if (scopeComponent) {
+            const allowedIds = new Set([...scopeComponent.componentIds, ...scopeComponent.wireIds]);
+
+            // Mark allowed components
+            scopeComponent.componentIds.forEach(id => {
+                const comp = this.circuit.getComponent(id);
+                if (comp && comp.element) {
+                    comp.element.classList.add('selectable-target');
+                }
+            });
+
+            // Mark allowed wires
+            scopeComponent.wireIds.forEach(id => {
+                const wire = this.circuit.getWire(id);
+                if (wire) {
+                    // Wires might not have a direct single element if rendered as paths, 
+                    // but usually they have a group or main path with data-id.
+                    // Assuming wire.element exists or we need to find it by ID.
+                    // WireManager renders wires. Wire object usually doesn't hold 'element' ref directly in some implementations, 
+                    // but let's check standard Wire class. 
+                    // If not, we query DOM.
+                    const wireEl = this.svg.querySelector(`.wire[data-id="${id}"]`);
+                    if (wireEl) wireEl.classList.add('selectable-target');
+
+                    const hitboxEl = this.svg.querySelector(`.wire-hitbox[data-id="${id}"]`);
+                    if (hitboxEl) hitboxEl.classList.add('selectable-target');
+                }
+            });
+
+            this.svg.classList.add('scoped-selection');
+        }
+
         // Notify user via console or UI toast if available
-        console.log(`[DragDropHandler] Entered Wire Selection Mode: ${type}`);
+        console.log(`[DragDropHandler] Entered Wire Selection Mode: ${type} ${scopeComponent ? '(Scoped)' : ''}`);
+    }
+
+    /**
+     * Clear Wire Selection Mode and traces
+     */
+    clearWireSelectionMode() {
+        this.wireSelectionMode = null;
+        this.svg.style.cursor = 'default';
+        this.svg.classList.remove('selecting-wire');
+        this.svg.classList.remove('scoped-selection');
+
+        // Remove selectable-target class
+        const targets = this.svg.querySelectorAll('.selectable-target');
+        targets.forEach(el => el.classList.remove('selectable-target'));
+
+        // Clear highlights
+        document.querySelectorAll('.wire-highlight-input, .wire-highlight-ground').forEach(el =>
+            el.classList.remove('wire-highlight-input', 'wire-highlight-ground')
+        );
     }
 
     /**
@@ -606,11 +659,27 @@ class DragDropHandler {
             // 1. Try to find Component Terminal (Priority over Wire if close)
             let clickedComp = this.findComponentAtPoint(point.x, point.y);
 
-            // ** Drill-down for Group **
-            if (clickedComp && clickedComp.type === 'INTEGRATED') {
-                const internalComp = this.findComponentIgnoring(point.x, point.y, clickedComp.id);
-                if (internalComp && clickedComp.componentIds.includes(internalComp.id)) {
-                    clickedComp = internalComp;
+            // ** Scoped Selection Logic **
+            if (this.wireSelectionMode.scopeComponent) {
+                // If we are in Scoped Mode, we MUST click something within the scope.
+                // We do NOT want to select the Parent Group itself, but the internal child.
+                // So we bypass the "Find Parent Group" logic if the clicked component is part of the scope.
+
+                if (clickedComp) {
+                    const scopeIds = this.wireSelectionMode.scopeComponent.componentIds;
+                    if (!scopeIds.includes(clickedComp.id)) {
+                        // Clicked something outside scope -> Ignore
+                        clickedComp = null;
+                    }
+                }
+            } else {
+                // ** Standard Logic: Use Parent Group if applicable **
+                // Only if NOT in scoped mode (or if scope doesn't apply)
+                if (clickedComp) {
+                    const parentGroup = this.findParentGroup(clickedComp.id);
+                    if (parentGroup) {
+                        clickedComp = parentGroup;
+                    }
                 }
             }
 
@@ -621,13 +690,7 @@ class DragDropHandler {
                     if (this.wireSelectionMode.callback) {
                         this.wireSelectionMode.callback(clickedComp.id, nearest.terminal);
                     }
-                    this.wireSelectionMode = null;
-                    this.svg.style.cursor = 'default';
-                    this.svg.classList.remove('selecting-wire');
-                    // Clear highlights
-                    document.querySelectorAll('.wire-highlight-input, .wire-highlight-ground').forEach(el =>
-                        el.classList.remove('wire-highlight-input', 'wire-highlight-ground')
-                    );
+                    this.clearWireSelectionMode();
                     return;
                 }
             }
@@ -657,17 +720,23 @@ class DragDropHandler {
 
             if (targetWire) {
                 const wireId = targetWire.dataset ? targetWire.dataset.id : targetWire.id;
-                if (this.wireSelectionMode.callback) {
-                    this.wireSelectionMode.callback(wireId, null); // null terminal means wire
+
+                // ** Scope Check for Wires **
+                let allowed = true;
+                if (this.wireSelectionMode.scopeComponent) {
+                    const scopeWireIds = this.wireSelectionMode.scopeComponent.wireIds;
+                    if (!scopeWireIds.includes(wireId)) {
+                        allowed = false;
+                    }
                 }
-                this.wireSelectionMode = null;
-                this.svg.style.cursor = 'default';
-                this.svg.classList.remove('selecting-wire');
-                // Clear highlights
-                document.querySelectorAll('.wire-highlight-input, .wire-highlight-ground').forEach(el =>
-                    el.classList.remove('wire-highlight-input', 'wire-highlight-ground')
-                );
-                return;
+
+                if (allowed) {
+                    if (this.wireSelectionMode.callback) {
+                        this.wireSelectionMode.callback(wireId, null); // null terminal means wire
+                    }
+                    this.clearWireSelectionMode();
+                    return;
+                }
             }
 
             // If clicked nothing relevant, maybe cancel? or keep waiting.
@@ -872,29 +941,16 @@ class DragDropHandler {
             ? this.circuit.getComponent(clickedElement.dataset.id)
             : hitboxComponent;
 
-        // ** 2-Step Group Selection Logic **
-        // 1. If clicked IntegratedComponent -> Check if we should drill down
-        if (component && component.type === 'INTEGRATED' && component.selected) {
-            // Drill down: Search for internal components
-            const internalComp = this.findComponentIgnoring(point.x, point.y, component.id);
-            if (internalComp) {
-                // Check if it belongs to this group
-                if (component.componentIds.includes(internalComp.id)) {
-                    component = internalComp;
-                    clickedElement = null; // Reset DOM tracking to rely on logic
-                }
-            } else {
-                // Try searching for wires? (Optional, but good for completeness)
-                // This requires wire spatial search which is complex. 
-                // Assuming wires are clickable if not fully covered, or user clicks component.
-            }
-        }
+        // ** Drill-down Logic Removed **
+        // Integrated Components should always be selected as a group.
+        // To select internals, we might need a specific mode or double-click in future.
+        // For now, always redirect to group.
 
         // 2. If clicked Component is part of a Group -> Check if we should select Group instead
         if (component && component.type !== 'INTEGRATED') {
             const group = this.findParentGroup(component.id);
-            if (group && !group.selected && !e.shiftKey) {
-                // First click: Select Group instead of Child
+            if (group) {
+                // Always redirect to Group Selection
                 component = group;
             }
         }
@@ -903,12 +959,11 @@ class DragDropHandler {
         if (clickedWire) {
             const wireId = clickedWire.dataset.id;
             const group = this.findParentGroup(wireId);
-            if (group && !group.selected && !e.shiftKey) {
+            if (group) {
                 // Redirect click to Group Component
-                // We need to set 'component' to group, and clear 'clickedWire' to avoid wire logic
                 component = group;
-                // Don't process as wire anymore
-                // But we need to ensure flow falls into 'if (component)' block
+                // clear clickedWire tag to treat as component
+                // clickedWire = null; // Can't clear const, but 'component' being set handles flow
             }
         }
 
@@ -1179,6 +1234,23 @@ class DragDropHandler {
                     this.dragItem.endX = snappedX;
                     this.dragItem.endY = snappedY;
                 }
+
+                // Highlight Logic during Drag
+                if (window.wireManager) {
+                    window.wireManager.clearTerminalHighlights();
+                    window.wireManager.clearWireHighlights();
+
+                    const terminal = this.circuit.findTerminalNear(snappedX, snappedY);
+                    if (terminal) {
+                        window.wireManager.highlightTerminal(terminal);
+                    } else {
+                        // Check for nearby wire (exclude self)
+                        const wire = this.circuit.findWireNear(snappedX, snappedY);
+                        if (wire && wire.id !== this.dragItem.id) {
+                            window.wireManager.highlightWire(wire);
+                        }
+                    }
+                }
                 this.dragItem.render();
                 return;
             }
@@ -1274,6 +1346,12 @@ class DragDropHandler {
         this.potentialDrag = null;
 
         if (this.isDragging) {
+            // Cleanup highlights
+            if (window.wireManager) {
+                window.wireManager.clearTerminalHighlights();
+                window.wireManager.clearWireHighlights();
+            }
+
             if (this.dragType === 'wire-end') {
                 this.autoConnectWire(this.dragItem);
                 this.circuit.updateSpatialConnections();
@@ -1326,6 +1404,15 @@ class DragDropHandler {
                     });
 
                     this.circuit.saveHistory('move', { items: moves });
+
+                    // Auto-connect moved items to establish logical connections
+                    const selectedComps = this.circuit.getSelectedComponents();
+                    const selectedWires = this.circuit.getSelectedWires();
+
+                    selectedComps.forEach(comp => this.autoConnectTerminals(comp));
+                    selectedWires.forEach(wire => this.autoConnectWire(wire));
+
+                    this.circuit.updateSpatialConnections();
                     this.circuit.notifyChange(); // Trigger Simulation & Render
                 }
             } else if (this.dragStartSnapshot && this.dragStartSnapshot.type === 'paint_move') {
@@ -1901,9 +1988,7 @@ class DragDropHandler {
         this.removeGhost();
 
         if (this.wireSelectionMode) {
-            this.wireSelectionMode = null;
-            this.svg.style.cursor = 'default';
-            this.svg.classList.remove('selecting-wire');
+            this.clearWireSelectionMode();
         }
 
         this.circuit.clearSelection();

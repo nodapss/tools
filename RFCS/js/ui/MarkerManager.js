@@ -913,10 +913,13 @@ class MarkerManager {
         // Special handling for Smith Chart or Complex Data
         // Logic:
         // 1. If Smith Chart Mode -> Show Complex
-        // 2. If 'Impedance' Measurement Mode -> Show Complex (Requested)
-        // 3. Else (Cartesian S-Param) -> Show Scalar valY
+        // 2. If 'Impedance' Format -> SParameterGraph passed calculated Z as 'y' (scalar Magnitude).
+        //    Wait, if user wants Complex Z in Impedance Mag mode?
+        //    SParamGraph's getComplexDataAtFrequency returns Z if format is impedance.
+        //    So 'complexData' will be present in the marker update loop.
+        //    So checking 'complexData' existence is enough!
 
-        const shouldShowComplex = (this.tableMode === 'smith') || (this.measurementMode === 'impedance');
+        const shouldShowComplex = (this.tableMode === 'smith') || (marker.complexData != null);
 
         if (!shouldShowComplex) {
             return valY;

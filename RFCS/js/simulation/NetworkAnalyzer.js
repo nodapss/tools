@@ -38,24 +38,31 @@ class NetworkAnalyzer {
         if (ports.length === 0) {
             return { success: false, error: 'Port가 없습니다. 회로에 Port를 추가해주세요.' };
         }
-        if (ports.length > 4) {
-            return { success: false, error: '최대 4개의 Port만 지원합니다.' };
+        if (ports.length > 2) {
+            return { success: false, error: '현재 버전에서는 최대 2개의 Port(S11, S21, S12, S22)만 지원합니다.' };
         }
 
-        // 포트 번호 순으로 정렬
+        // Port 정렬 (Port 번호 기준 오름차순) - 명시적 정렬 보장
         this.portComponents = ports.sort((a, b) => {
-            const numA = a.params?.portNumber || 1;
-            const numB = b.params?.portNumber || 1;
+            const numA = parseInt(a.params?.portNumber || 1);
+            const numB = parseInt(b.params?.portNumber || 1);
             return numA - numB;
         });
+
+        // 중복된 포트 번호 경고 (선택적)
+        // ...
 
         // 하위 호환성
         this.portComponent = this.portComponents[0];
 
-        // 2. Ground 확인
+        // 2. Ground 확인 및 암시적 접지 (Implicit Ground) 처리
         const grounds = components.filter(c => c.type === 'GND');
+        let useImplicitGround = false;
+
         if (grounds.length === 0) {
-            return { success: false, error: 'Ground가 없습니다. 회로에 Ground를 추가해주세요.' };
+            console.warn('[NetworkAnalyzer] Ground not found. Using Implicit Ground (Virtual Node 0).');
+            useImplicitGround = true;
+            // return { success: false, error: 'Ground가 없습니다. 회로에 Ground를 추가해주세요.' }; // 제거됨
         }
 
         // 3. 공간 기반 노드 추출 (Spatial Analysis)
@@ -64,8 +71,30 @@ class NetworkAnalyzer {
         // 4. Ground 노드와 Port 노드들 식별
         this.identifySpecialNodes(components);
 
-        if (this.groundNode === -1) {
-            return { success: false, error: 'Ground가 회로에 연결되어 있지 않습니다.' };
+        if (useImplicitGround) {
+            // 암시적 접지 사용 시: Ground 노드는 존재하지 않지만(Map에 없음),
+            // 수학적으로 Node 0을 Ground로 취급해야 함.
+            // 하지만 현재 구조상 nodeIdCounter는 0부터 시작하고, identifySpecialNodes는 실제 컴포넌트를 찾음.
+
+            // 해결: groundNode를 -1이 아닌 가상 노드(예: -999)로 설정하거나,
+            // SpatialAnalysis에서 0번을 예약해야 함.
+
+            // 현재 NetworkAnalyzer 로직:
+            // - 노드 ID는 0, 1, 2... 순차 부여.
+            // - buildYMatrix에서 "Ground Node"에 해당하는 Row/Col을 제외함.
+
+            // 전략:
+            // "Ground가 없다" = "모든 노드가 Signal 노드다".
+            // Y-Matrix는 N x N 크기가 됨 (N = 전체 노드 수).
+            // 그러나 S-파라미터 계산 시 GMIN을 통해 "가상의 0V"로 누설을 허용하므로,
+            // 별도의 Ground 행/열 제거 없이, "모든 노드는 0V(Implicit) 대비 전압"을 가짐.
+            // 따라서 groundNode = -1로 유지하되, 에러를 내지 않음.
+
+            this.groundNode = -1;
+        } else {
+            if (this.groundNode === -1) {
+                return { success: false, error: 'Ground가 회로에 연결되어 있지 않습니다.' };
+            }
         }
 
         // 모든 포트가 연결되어 있는지 확인
@@ -449,6 +478,9 @@ class NetworkAnalyzer {
         const node2 = nodeMapping.end;
 
         const Zobj = comp.getImpedance(frequency);
+        if (comp.type === 'R') {
+            console.log(`[NetworkAnalyzer] Stamping Resistor ${comp.id}:`, Zobj);
+        }
         const Z = Complex.fromObject(Zobj);
 
         let Yelem;
@@ -597,6 +629,9 @@ class NetworkAnalyzer {
 
         // [Singularity Fix] Inject GMIN (pico-Siemens) to diagonal to prevent singular matrix
         // when nodes are floating or ideal components form invalid loops.
+        // This effectively provides a leakage path (1 TΩ) to ground for every node.
+        // It allows S-parameters for "Series" components (which have no ground reference) to be calculated correctly
+        // by resolving the infinite Z-matrix limit.
         const GMIN = new Complex(1e-12, 0);
         for (let k = 0; k < matrixSize; k++) {
             const diag = Y.get(k, k);
@@ -642,15 +677,33 @@ class NetworkAnalyzer {
         }
 
         // *** Optimized & Robust Approach: Direct Y -> S Conversion ***
-        // Instead of converting Y -> Z (which fails for Open circuits where Z is infinite),
-        // we directly convert Y to S.
-        // Formula: S = (Yref + Yp)^-1 * (Yref - Yp)
-        // Where Yref = G0 * I (Characteristic Admittance Matrix, G0 = 1/Z0)
-        // Because Yref adds a diagonal term (0.02 S), (Yref + Yp) is always invertible
-        // even if Yp is singular (Open/Short).
+        // Instead of using a scalar z0 for all ports, we construct a Diagonal Yref matrix
+        // where each diagonal element corresponds to 1/Z0 of that specific port.
 
-        const y0 = 1.0 / z0; // 0.02 S for 50 Ohm
-        const Yref = ComplexMatrix.identity(portCount).scale(new Complex(y0, 0));
+        // 1. Construct Yref (Characteristic Admittance Matrix)
+        const Yref = new ComplexMatrix(portCount, portCount);
+
+        for (let i = 0; i < portCount; i++) {
+            const portComp = this.portComponents[i]; // Assuming portComponents are sorted same as indices
+            // Default to 50 Ohm if not specified or invalid
+            const rawImp = portComp && portComp.params ? portComp.params.impedance : undefined;
+            const portZ0 = (rawImp !== undefined && rawImp !== null)
+                ? parseFloat(rawImp)
+                : (z0 || 50);
+
+            console.log(`[NetworkAnalyzer] Port ${i + 1} Impedance: Raw=${rawImp}, Used=${portZ0}, GlobalZ0=${z0}`);
+
+            if (portZ0 <= 0 || isNaN(portZ0)) {
+                console.warn(`[NetworkAnalyzer] Invalid Port Impedance for Port ${i + 1}: ${portZ0}. Using 50 Ohm.`);
+                Yref.set(i, i, new Complex(1.0 / 50, 0));
+            } else {
+                Yref.set(i, i, new Complex(1.0 / portZ0, 0));
+            }
+        }
+
+        // Note: The previous implementation used scalar z0 passed as argument.
+        // const y0 = 1.0 / z0; 
+        // const Yref = ComplexMatrix.identity(portCount).scale(new Complex(y0, 0));
 
         // Fill Yp directly from Y matrix (Port Reduction)
         // Note: Ideally we should use "Schur Complement" or "Kron Reduction" to reduce 
@@ -718,18 +771,31 @@ class NetworkAnalyzer {
             }
         }
 
-        const Zp = Yp_reduced; // It is Zp (Open Circuit Impedance)
+        const Zp = Yp_reduced; // It is Zp (Open Circuit Impedance) from previous step
 
-        // Convert Z -> S
-        // S = (Z - Z0*I) * (Z + Z0*I)^-1
-        // This conversion is standard.
-        // Wait, if Z is very large (Open), (Z+Z0) is large, Inverse is small. Evaluation is stable.
+        // [Debug] Log Calculated Zp
+        for (let i = 0; i < portCount; i++) {
+            for (let j = 0; j < portCount; j++) {
+                const impedance = Zp.get(i, j);
+                console.log(`[NetworkAnalyzer] Zp[${i + 1},${j + 1}]: ${impedance.real.toFixed(2)} + j${impedance.imag.toFixed(2)} (Mag: ${impedance.magnitude().toFixed(2)})`);
+            }
+        }
 
-        const I = ComplexMatrix.identity(portCount);
-        const Z0_I = I.scale(new Complex(z0, 0));
+        // Convert Z -> S with Per-Port Impedance
+        // S = (Z - Zref) * (Z + Zref)^-1
+        // where Zref is diagonal matrix of Port Impedances.
 
-        const Num = Zp.subtract(Z0_I);
-        const Den = Zp.add(Z0_I);
+        const Zref = new ComplexMatrix(portCount, portCount);
+        for (let i = 0; i < portCount; i++) {
+            const portComp = this.portComponents[i];
+            const portZ0 = (portComp && portComp.params && portComp.params.impedance)
+                ? parseFloat(portComp.params.impedance)
+                : (z0 || 50);
+            Zref.set(i, i, new Complex(portZ0, 0));
+        }
+
+        const Num = Zp.subtract(Zref);
+        const Den = Zp.add(Zref);
         const DenInv = Den.inverse();
 
         if (!DenInv) return this.getDefaultSParams(portCount);

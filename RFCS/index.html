@@ -364,7 +364,6 @@
                             <option value="S21">S21</option>
                             <option value="S12">S12</option>
                             <option value="S22">S22</option>
-                            <option value="impedance">Impedance</option>
                             <option value="matchingRange">Matching Range</option>
                         </select>
                     </div>
@@ -414,6 +413,7 @@
                         <select id="formatSelect" class="settings-select">
                             <option value="logMag" selected>Log Mag</option>
                             <option value="linMag">Lin Mag</option>
+                            <option value="impedance">Impedance Mag</option>
                             <option value="linRabsX">Lin R, X</option>
                             <option value="phase">Phase</option>
                             <option value="delay">Delay</option>
@@ -796,11 +796,54 @@
     <!-- IntegratedConfigModal removed -->
     <script src="js/ui/SettingsModal.js"></script>
     <script src="js/ui/ShortcutModal.js"></script>
+    <script src="js/ui/VirtualCircuitModal.js"></script>
+    <script src="js/utils/PatchNoteParser.js"></script>
+    <script src="js/ui/PatchNoteModal.js"></script>
     <script src="js/managers/DrawingManager.js"></script>
     <script src="js/managers/SimulationController.js"></script>
-    <script src="js/managers/GraphController.js"></script>
-    <!-- Main -->
-    <script src="js/main.js"></script>
+</body>
+
+<!-- Virtual Circuit Modal -->
+<div id="virtualCircuitModal" class="modal">
+    <div class="modal-overlay"></div>
+    <!-- Resize to ~1/3, Absolute Position for Dragging -->
+    <div class="modal-content"
+        style="width: 115%; height: 80%; display: flex; flex-direction: column; position: absolute; top: 10%; left: 5%; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <div class="modal-header" style="cursor: move; user-select: none;">
+            <h3>Block Circuit View</h3>
+            <button class="modal-close" id="btnCloseVirtualCircuitModal">&times;</button>
+        </div>
+        <div class="modal-body" style="flex: 1; padding: 0; overflow: hidden; background: var(--canvas-bg);">
+            <div class="canvas-wrapper" style="width: 100%; height: 100%; position: relative;">
+                <svg id="virtualCircuitCanvas" class="circuit-canvas" style="width:100%; height:100%; display: block;">
+                    <defs>
+                        <pattern id="vcGridPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+                            <circle cx="0" cy="0"
+                                style="r: var(--grid-minor-size); opacity: var(--grid-minor-opacity); fill: var(--grid-dot-color);" />
+                        </pattern>
+                        <pattern id="vcGridPatternLarge" width="100" height="100" patternUnits="userSpaceOnUse">
+                            <rect width="100" height="100" fill="url(#vcGridPattern)" />
+                        </pattern>
+                        <marker id="vcArrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#ff00ff" />
+                        </marker>
+                    </defs>
+                    <rect class="grid-background" width="100%" height="100%" fill="url(#vcGridPatternLarge)" />
+                    <g id="vcWiresLayer"></g>
+                    <g id="vcComponentsLayer"></g>
+                </svg>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btnCloseVirtualCircuit" class="btn secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+</html>
+<script src="js/managers/GraphController.js"></script>
+<!-- Main -->
+<script src="js/main.js"></script>
 </body>
 
 </html>

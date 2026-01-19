@@ -22,6 +22,7 @@ let graphController;
 let notificationManager;
 let shortcutHandler;
 let drawingManager;
+let patchNoteModal;
 
 /**
  * Initialize the application
@@ -192,6 +193,15 @@ function initApp() {
     // Initialize Drawing Manager
     drawingManager = new DrawingManager(canvasManager);
     window.drawingManager = drawingManager;
+
+    // Initialize PatchNote Modal (Auto-Show)
+    try {
+        patchNoteModal = new PatchNoteModal();
+        window.patchNoteModal = patchNoteModal;
+        patchNoteModal.autoShow();
+    } catch (e) {
+        console.error('Failed to init PatchNoteModal:', e);
+    }
 
 
 

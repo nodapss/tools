@@ -6,6 +6,7 @@
 class IntegratedComponent extends Component {
     constructor(x, y) {
         super('INTEGRATED', x, y);
+        this.id = this.id.replace('INTEGRATED', 'BLOCK');
 
         // Reference IDs instead of embedded copies
         this.componentIds = [];
@@ -26,6 +27,10 @@ class IntegratedComponent extends Component {
         // Label position relative to center
         this.labelX = 0;
         this.labelY = -40;
+
+        // Cache for Virtual Circuit
+        this.virtualCircuit = null;
+        this._internalAnalyzer = null;
     }
 
     /**
@@ -41,6 +46,9 @@ class IntegratedComponent extends Component {
 
         // Dimensions will be updated by Circuit or render loop
         this.updateDimensions();
+
+        // Eager Build: Create virtual circuit immediately (and cache it)
+        this.rebuildVirtualCircuit();
     }
 
     /**
@@ -162,6 +170,17 @@ class IntegratedComponent extends Component {
         if (data.componentIds) comp.componentIds = data.componentIds;
         if (data.wireIds) comp.wireIds = data.wireIds;
 
+        // Restore Virtual Circuit (rebuild on load)
+        if (comp.componentIds.length > 0) {
+            // Check if window.circuit is ready? 
+            // fromJSON is usually called DURING circuit load, so getting components might fail if they are not yet added?
+            // Circuit.load uses a 2-pass approach or adds all first.
+            // But we can't rebuild here if valid refs don't exist yet.
+            // So we mark it as "needs rebuild" or rely on lazy load for the VERY FIRST time?
+            // Actually, strategy said "Create Integrated Component" triggers rebuild.
+            // Loading from file is different. Let's start with null and let lazy mechanism or circuit post-load handle it.
+        }
+
         // Fallback for old Embedded format (migration)
         if (data.subComponents && !data.componentIds) {
             // If loading old file, we might lose data if we don't restore them to circuit?
@@ -233,6 +252,7 @@ class IntegratedComponent extends Component {
 
             const wireData = originalWire.toJSON();
             const wire = new window.Wire(wireData.startX, wireData.startY, wireData.endX, wireData.endY);
+            wire.id = id; // Preserve ID (Safe since it's an isolated circuit)
 
             // Map IDs
             if (wireData.startComponent && idMap.has(wireData.startComponent)) {
@@ -245,38 +265,78 @@ class IntegratedComponent extends Component {
             }
 
             tempCircuit.addWire(wire);
+            idMap.set(id, wire);
         });
 
         // 3. Attach Input Port (Same logic as before, but using live-cloned Map)
-        const [inId, inTerm] = (this.internalPortConfig.inputTerminal || '').split(':');
-        const [gndId, gndTerm] = (this.internalPortConfig.groundTerminal || '').split(':');
+        // 3. Attach Input Port
+        const [inIdRaw, inTermRaw] = (this.internalPortConfig.inputTerminal || '').split(':');
+        let inTarget = null;
+        let inPos = null;
+        let inIsWire = false;
 
-        if (inId && idMap.has(inId)) {
-            const targetComp = idMap.get(inId);
-            const pos = targetComp.getTerminalPosition(inTerm);
+        // Determine Input Target & Position
+        if (inIdRaw === 'Wire') {
+            if (idMap.has(inTermRaw)) {
+                inTarget = idMap.get(inTermRaw);
+                inPos = {
+                    x: (inTarget.startX + inTarget.endX) / 2,
+                    y: (inTarget.startY + inTarget.endY) / 2
+                };
+                inIsWire = true;
+            }
+        } else if (inIdRaw && idMap.has(inIdRaw)) {
+            inTarget = idMap.get(inIdRaw);
+            inPos = inTarget.getTerminalPosition(inTermRaw);
+        }
 
-            const port = new window.Port(pos.x - 60, pos.y, 1, 50);
+        if (inTarget && inPos) {
+            const port = new window.Port(inPos.x - 60, inPos.y, 1, 50);
             tempCircuit.addComponent(port);
 
-            const wire = new window.Wire(port.x + 20, port.y, pos.x, pos.y);
+            const wire = new window.Wire(port.x + 20, port.y, inPos.x, inPos.y);
             wire.startComponent = port.id;
             wire.startTerminal = 'start';
-            wire.endComponent = inId;
-            wire.endTerminal = inTerm;
+
+            if (!inIsWire) {
+                wire.endComponent = inIdRaw;
+                wire.endTerminal = inTermRaw;
+            }
             tempCircuit.addWire(wire);
         }
 
         // 4. Attach Ground
-        if (gndId && idMap.has(gndId)) {
-            const targetComp = idMap.get(gndId);
-            const pos = targetComp.getTerminalPosition(gndTerm);
+        const [gndIdRaw, gndTermRaw] = (this.internalPortConfig.groundTerminal || '').split(':');
+        let gndTarget = null;
+        let gndPos = null;
+        let gndIsWire = false;
 
-            const gnd = new window.Ground(pos.x + 60, pos.y);
+        // Determine Ground Target & Position
+        if (gndIdRaw === 'Wire') {
+            if (idMap.has(gndTermRaw)) {
+                gndTarget = idMap.get(gndTermRaw);
+                gndPos = {
+                    x: (gndTarget.startX + gndTarget.endX) / 2,
+                    y: (gndTarget.startY + gndTarget.endY) / 2
+                };
+                gndIsWire = true;
+            }
+        } else if (gndIdRaw && idMap.has(gndIdRaw)) {
+            gndTarget = idMap.get(gndIdRaw);
+            gndPos = gndTarget.getTerminalPosition(gndTermRaw);
+        }
+
+        if (gndTarget && gndPos) {
+            const gnd = new window.Ground(gndPos.x + 60, gndPos.y);
             tempCircuit.addComponent(gnd);
 
-            const wire = new window.Wire(pos.x, pos.y, gnd.x, gnd.y - 20);
-            wire.startComponent = gndId;
-            wire.startTerminal = gndTerm;
+            const wire = new window.Wire(gndPos.x, gndPos.y, gnd.x, gnd.y - 20);
+
+            if (!gndIsWire) {
+                wire.startComponent = gndIdRaw;
+                wire.startTerminal = gndTermRaw;
+            }
+
             wire.endComponent = gnd.id;
             wire.endTerminal = 'start';
             tempCircuit.addWire(wire);
@@ -285,24 +345,36 @@ class IntegratedComponent extends Component {
         return tempCircuit;
     }
 
+    /**
+     * Rebuild Virtual Circuit (Eager / Refresh)
+     */
+    rebuildVirtualCircuit() {
+        this.virtualCircuit = this.buildInternalSimulationModel();
+        // Clear analyzer cache since circuit changed
+        this._internalAnalyzer = null;
+        console.log(`[Block] Virtual Circuit Rebuilt for ${this.id}`);
+
+        // Notify UI that this VC has been rebuilt
+        window.dispatchEvent(new CustomEvent('integrated-component-rebuilt', {
+            detail: { id: this.id }
+        }));
+
+        return this.virtualCircuit;
+    }
+
     getImpedance(frequency) {
-        // Cache invalidation logic could be added here (e.g. check version ID of circuit)
-        // For now, rebuild every time or rely on manual invalidation?
-        // User said "Internal calculation... leave it".
-        // But with live references, we should probably rebuild if invalid.
-        // For performance, let's keep the lazy load but we need a way to know if internals changed.
-        // Since we are "Grouping", any change in circuit 'global' might affect us.
-        // Safer to rebuild if not extremely heavy. Or subscribe to circuit change.
+        // Use Cached Virtual Circuit
+        if (!this.virtualCircuit) {
+            // Fallback: Try to build (if not built yet, e.g. after load)
+            this.rebuildVirtualCircuit();
+        }
 
-        // For now, let's Re-build to ensure correctness (Zero-Copy optimization mentioned in history was for embedded)
-        // Since we fetch from map now, it's fast.
+        if (!this.virtualCircuit) return { real: Infinity, imag: 0 };
 
-        // Actually, let's check basic cache.
+        // Analyzer also needs caching? 
+        // We clear _internalAnalyzer when virtualCircuit is rebuilt.
         if (!this._internalAnalyzer) {
-            const tempCircuit = this.buildInternalSimulationModel();
-            if (!tempCircuit) return { real: Infinity, imag: 0 };
-
-            this._internalAnalyzer = new window.NetworkAnalyzer(tempCircuit);
+            this._internalAnalyzer = new window.NetworkAnalyzer(this.virtualCircuit);
             this._internalAnalyzer.analyze();
         }
 
@@ -317,8 +389,17 @@ class IntegratedComponent extends Component {
      * Invalidate Cache (Call this when internal params change)
      */
     invalidateCache() {
-        this._internalAnalyzer = null;
-        console.log(`[IntegratedComponent] Cache invalidated for ${this.id}`);
+        // If Eager strategy, we Rebuild immediately? 
+        // Or just clear and wait for next use?
+        // User said "rebuild OR invalidate". 
+        // Let's Invalidate (Clear) here, and if UI needs it, it calls getter.
+        // But Strategy said "Circuit.notifyChange -> update".
+        // Let's just Clear here. Rebuild happens on next getImpedance or View.
+        // Wait, if "Create" is eager, "Update" should maybe be eager too?
+        // For performance, let's keep invalidation lazy-rebuild-on-demand IF heavy updates happen frequently (like dragging).
+        // But user asked for Eager. Let's do Rebuild.
+
+        this.rebuildVirtualCircuit();
     }
 }
 

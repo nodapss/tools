@@ -1053,6 +1053,16 @@ else if (this.clipboard.type === 'wire') {
      * Notify listeners of change
      */
     notifyChange() {
+        // Invalidate Cache for all Integrated Components
+        // (Since we don't know exactly which one might receive a new wire or have a child moved,
+        //  it's safest to invalidate all. Optimization: Check if change involved items in componentIds)
+        // For now, simple iteration is fast enough.
+        this.components.forEach(comp => {
+            if (comp.type === 'INTEGRATED' && comp.invalidateCache) {
+                comp.invalidateCache();
+            }
+        });
+
         if (this.onChange) {
             this.onChange();
         }
@@ -1155,6 +1165,18 @@ else if (this.clipboard.type === 'wire') {
 
             if ((wire.startComponent === componentId && wire.startTerminal === terminal) ||
                 (wire.endComponent === componentId && wire.endTerminal === terminal)) {
+                return wire;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find wire near a point
+     */
+    findWireNear(x, y, tolerance = 10) {
+        for (const wire of this.wires.values()) {
+            if (wire.containsPoint(x, y, tolerance)) {
                 return wire;
             }
         }

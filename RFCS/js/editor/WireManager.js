@@ -315,8 +315,16 @@ class WireManager {
         // Highlight nearby terminals
         const terminal = this.circuit.findTerminalNear(point.x, point.y);
         this.clearTerminalHighlights();
+        this.clearWireHighlights();
+
         if (terminal) {
             this.highlightTerminal(terminal);
+        } else {
+            // If no terminal, check for nearby wires to highlight
+            const wire = this.circuit.findWireNear(point.x, point.y);
+            if (wire) {
+                this.highlightWire(wire);
+            }
         }
 
         // Update preview if drawing
@@ -493,11 +501,33 @@ class WireManager {
     highlightTerminal(terminal) {
         const comp = this.circuit.getComponent(terminal.componentId);
         if (comp && comp.element) {
-            const terminalEl = comp.element.querySelector(`[data-terminal="${terminal.terminal}"]`);
+            const terminalEl = comp.element.querySelector(`.terminal[data-terminal="${terminal.terminal}"]`);
             if (terminalEl) {
                 terminalEl.classList.add('highlight');
             }
         }
+    }
+
+    /**
+     * Highlight wire
+     */
+    highlightWire(wire) {
+        if (wire && wire.element) {
+            const wirePath = wire.element.querySelector('.wire');
+            if (wirePath) {
+                wirePath.classList.add('highlight');
+            }
+        }
+    }
+
+    /**
+     * Clear all wire highlights
+     */
+    clearWireHighlights() {
+        if (!this.svg) return;
+        this.svg.querySelectorAll('.wire.highlight').forEach(el => {
+            el.classList.remove('highlight');
+        });
     }
 
     /**

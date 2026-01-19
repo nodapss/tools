@@ -9,7 +9,8 @@ class TransmissionLine extends Component {
             modelType: 'standard', // 'standard' or 'rlgc'
 
             // Standard Params
-            z0: z0,              // Characteristic impedance (Ohms)
+            z0: z0,              // Characteristic impedance (Real part) (Ohms)
+            z0_imag: 0,          // Characteristic impedance (Imaginary part) (Ohms) - NEW
             length: length,      // Physical length (meters)
             velocity: velocity,  // Phase velocity (m/s)
             loss: 0,             // Attenuation (dB/m)
@@ -61,7 +62,17 @@ class TransmissionLine extends Component {
                 <text class="component-value" x="0" y="22" text-anchor="middle">RLGC, ${lenStr}</text>
             `;
         } else {
-            const z0Str = `${this.params.z0}Ω`;
+            let z0Str;
+            if (Math.abs(this.params.z0_imag) > 1e-9) {
+                // Formatting Complex Z0: R+jX
+                const r = Math.round(this.params.z0 * 10) / 10;
+                const x = Math.round(this.params.z0_imag * 10) / 10;
+                const sign = x >= 0 ? '+' : '-';
+                z0Str = `${r}${sign}j${Math.abs(x)}Ω`;
+            } else {
+                z0Str = `${this.params.z0}Ω`;
+            }
+
             const lossStr = this.params.loss > 0 ? `, ${this.params.loss}dB/m` : '';
             return `
                 <text class="component-value" x="0" y="22" text-anchor="middle">${z0Str}, ${lenStr}${lossStr}</text>
@@ -135,8 +146,8 @@ class TransmissionLine extends Component {
             // beta (rad/m) = w / v
             beta = w / this.params.velocity;
 
-            // Zc is real Z0
-            Zc = new Complex(this.params.z0, 0);
+            // Zc = Z0_real + j*Z0_imag
+            Zc = new Complex(this.params.z0, this.params.z0_imag || 0);
         }
 
         // Apply length
@@ -178,7 +189,7 @@ class TransmissionLine extends Component {
             const ang = Zc2.phase() / 2;
             return new Complex(mag * Math.cos(ang), mag * Math.sin(ang));
         }
-        return new Complex(this.params.z0, 0);
+        return new Complex(this.params.z0, this.params.z0_imag || 0);
     }
 
     /**
@@ -216,6 +227,7 @@ class TransmissionLine extends Component {
         tline.connections = data.connections;
 
         // Restore extended params
+        if (data.params.z0_imag !== undefined) tline.params.z0_imag = data.params.z0_imag;
         if (data.params.loss !== undefined) tline.params.loss = data.params.loss;
         if (data.params.modelType) tline.params.modelType = data.params.modelType;
         if (data.params.r !== undefined) tline.params.r = data.params.r;

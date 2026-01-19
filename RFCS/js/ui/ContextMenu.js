@@ -69,7 +69,26 @@ class ContextMenu {
         this.menuElement.innerHTML = '';
 
         // Handle Multi-Selection
-        if (window.circuit && window.circuit.selectedItems.size > 1) {
+        let effectiveSelection = window.circuit.selectedItems;
+        let isGroupSelection = false;
+
+        // ** Check for "Group + Children" Pattern **
+        // If the target is an Integrated Component, and the selection consists ONLY of the Group and its children,
+        // we treat it as a Single Selection (of the Group).
+        if (this.target && this.target.type === 'INTEGRATED') {
+            const groupIds = new Set([this.target.id, ...this.target.componentIds, ...this.target.wireIds]);
+            const selectedIds = Array.from(window.circuit.selectedItems);
+
+            // Check if ALL selected items are part of this group
+            const isPureGroupSelection = selectedIds.every(id => groupIds.has(id));
+
+            if (isPureGroupSelection) {
+                isGroupSelection = true;
+            }
+        }
+
+        // Handle Multi-Selection (bypassed if it's a pure group selection)
+        if (!isGroupSelection && window.circuit && window.circuit.selectedItems.size > 1) {
             const selectionCount = window.circuit.selectedItems.size;
 
             // Title
@@ -87,8 +106,8 @@ class ContextMenu {
             }
 
 
-            // --- NEW: Plot Impedance (Group) ---
-            const groupPlotItem = this.createMenuItem('Plot Impedance (Group)', () => {
+            // --- NEW: Configure Test Ports (Group) ---
+            const groupPlotItem = this.createMenuItem('Configure Test Ports', () => {
                 // Logic to open modal for group
                 const selectedComponents = components; // Already filtered above
                 const selectedWires = Array.from(window.circuit.selectedItems)
@@ -112,8 +131,8 @@ class ContextMenu {
             const hasGroup = selectedGroups.length > 0;
 
             if (hasGroup) {
-                // --- Condition: Group(s) Selected -> Show Ungroup ---
-                const ungroupItem = this.createMenuItem('Ungroup Components', () => {
+                // --- Condition: Group(s) Selected -> Show Dissolve ---
+                const ungroupItem = this.createMenuItem('Dissolve Test Block', () => {
                     selectedGroups.forEach(group => {
                         if (window.circuit) window.circuit.ungroupIntegratedComponent(group.id);
                     });
@@ -122,8 +141,8 @@ class ContextMenu {
                 ungroupItem.style.borderTop = '1px solid var(--border-color)';
                 this.menuElement.appendChild(ungroupItem);
             } else {
-                // --- Condition: No Groups -> Show Create Group ---
-                const createIntegratedItem = this.createMenuItem('Create Integrated Component', () => {
+                // --- Condition: No Groups -> Show Create Block ---
+                const createIntegratedItem = this.createMenuItem('Create Block', () => {
                     const selectedComponents = components;
                     const selectedWires = Array.from(window.circuit.selectedItems)
                         .map(id => window.circuit.getWire(id))
@@ -160,9 +179,10 @@ class ContextMenu {
 
         // --- Handles INTEGRATED Component as Group Plot ---
         if (this.target.type === 'INTEGRATED') {
-            const groupPlotItem = this.createMenuItem('Plot Impedance (Group)', () => {
-                const componentIds = this.target.componentIds || [];
-                const wireIds = this.target.wireIds || [];
+            const currentTarget = this.target; // Capture target locally
+            const groupPlotItem = this.createMenuItem('Configure Test Ports', () => {
+                const componentIds = currentTarget.componentIds || [];
+                const wireIds = currentTarget.wireIds || [];
 
                 // Resolve objects
                 const components = componentIds.map(id => window.circuit.getComponent(id)).filter(c => c);
@@ -170,13 +190,30 @@ class ContextMenu {
 
                 this.hide();
                 if (this.impedanceModal) {
-                    this.impedanceModal.open(components, null, wires);
+                    // ARGUMENTS: targets, callback, secondaryTargets, defaultConfig, contextComponent
+                    this.impedanceModal.open(components, null, wires, currentTarget.internalPortConfig, currentTarget);
                 }
             });
             this.menuElement.appendChild(groupPlotItem);
 
-            // --- NEW: UnGroup Option ---
-            const ungroupItem = this.createMenuItem('UnGroup Components', () => {
+            // --- NEW: View Block Circuit Option ---
+            const viewVirtualCircuitItem = this.createMenuItem('View Block Circuit', () => {
+                if (window.virtualCircuitModal) {
+                    window.virtualCircuitModal.open(this.target);
+                    // this.hide(); // createMenuItem usually handles click? NO, the callback handles logic.
+                    // The createMenuItem helper likely doesn't auto-hide if we provide callback? 
+                    // Checking existing code: createMenuItem(text, onClick) -> onClick wrapper usually calls logic.
+                    // The existing calls invoke this.hide() manually inside.
+                } else {
+                    console.error('VirtualCircuitModal not found');
+                }
+                this.hide();
+            });
+            viewVirtualCircuitItem.style.borderTop = '1px solid var(--border-color)';
+            this.menuElement.appendChild(viewVirtualCircuitItem);
+
+            // --- NEW: Dissolve Option ---
+            const ungroupItem = this.createMenuItem('Dissolve Block', () => {
                 if (window.circuit) {
                     window.circuit.ungroupIntegratedComponent(this.target.id);
                 }
@@ -187,9 +224,9 @@ class ContextMenu {
             this.menuElement.appendChild(ungroupItem);
 
         } else {
-            // Plot Impedance Option (Single)
+            // Simulate Component Option (Single)
             // Opens configuration modal to invoke single component simulation
-            const impedanceItem = this.createMenuItem('Plot Impedance', () => {
+            const impedanceItem = this.createMenuItem('Simulate Component', () => {
                 const currentTarget = this.target; // Capture target before hiding menu
                 this.hide();
                 if (this.impedanceModal && currentTarget) {
